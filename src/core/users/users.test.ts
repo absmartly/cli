@@ -118,6 +118,32 @@ describe('listUsers', () => {
 
     expect(mockClient.listUsers).toHaveBeenCalledWith({ includeArchived: true });
   });
+
+  it('should forward native search/sort/sortAsc/ids to the API client', async () => {
+    mockClient.listUsers.mockResolvedValue([]);
+
+    await listUsers(mockClient, {
+      search: 'alice',
+      sort: 'email',
+      sortAsc: true,
+      ids: '1,2',
+    });
+
+    expect(mockClient.listUsers).toHaveBeenCalledWith({
+      search: 'alice',
+      sort: 'email',
+      sort_asc: true,
+      ids: '1,2',
+    });
+  });
+
+  it('should not forward undefined native filters', async () => {
+    mockClient.listUsers.mockResolvedValue([]);
+
+    await listUsers(mockClient, { items: 10, page: 2 });
+
+    expect(mockClient.listUsers).toHaveBeenCalledWith({ items: 10, page: 2 });
+  });
 });
 
 describe('resetUserPassword', () => {

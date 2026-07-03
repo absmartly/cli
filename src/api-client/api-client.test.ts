@@ -429,6 +429,56 @@ describe.skipIf(isLiveMode)('APIClient core', () => {
       expect(await client.listUsers()).toHaveLength(1);
     });
 
+    it('should serialize native list filters as query params', async () => {
+      let capturedUrl: string | undefined;
+      server.use(
+        http.get(`${BASE_URL}/users`, ({ request }) => {
+          capturedUrl = request.url;
+          return HttpResponse.json({ users: [{ id: 1, email: 'a@b.c' }] });
+        })
+      );
+      await client.listUsers({
+        search: 'alice',
+        sort: 'email',
+        sort_asc: true,
+        ids: '1,2,3',
+      });
+      expect(capturedUrl).toBeDefined();
+      const url = new URL(capturedUrl!);
+      expect(url.searchParams.get('search')).toBe('alice');
+      expect(url.searchParams.get('sort')).toBe('email');
+      expect(url.searchParams.get('sort_asc')).toBe('true');
+      expect(url.searchParams.get('ids')).toBe('1,2,3');
+    });
+
+    it('should send include_archived when includeArchived is true', async () => {
+      let capturedUrl: string | undefined;
+      server.use(
+        http.get(`${BASE_URL}/users`, ({ request }) => {
+          capturedUrl = request.url;
+          return HttpResponse.json({ users: [] });
+        })
+      );
+      await client.listUsers({ includeArchived: true });
+      expect(new URL(capturedUrl!).searchParams.get('include_archived')).toBe('1');
+    });
+
+    it('should not send native filter params when omitted', async () => {
+      let capturedUrl: string | undefined;
+      server.use(
+        http.get(`${BASE_URL}/users`, ({ request }) => {
+          capturedUrl = request.url;
+          return HttpResponse.json({ users: [] });
+        })
+      );
+      await client.listUsers();
+      const url = new URL(capturedUrl!);
+      expect(url.searchParams.get('sort')).toBeNull();
+      expect(url.searchParams.get('sort_asc')).toBeNull();
+      expect(url.searchParams.get('ids')).toBeNull();
+      expect(url.searchParams.get('search')).toBeNull();
+    });
+
     it('should reset user password', async () => {
       server.use(
         http.put(`${BASE_URL}/users/1/reset-password`, () =>
