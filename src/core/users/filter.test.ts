@@ -100,10 +100,22 @@ describe('userGlobalRoleIds', () => {
 });
 
 describe('resolveRoleIds', () => {
-  it('uses numeric tokens directly as IDs', async () => {
+  it('validates numeric tokens via a batched listRoles({ ids }) lookup', async () => {
+    vi.mocked(mockClient.listRoles).mockResolvedValue([
+      { id: 1, name: 'A' },
+      { id: 2, name: 'B' },
+      { id: 3, name: 'C' },
+    ] as any);
     const result = await resolveRoleIds(mockClient, ['1', '2', '3']);
-    expect(mockClient.listRoles).not.toHaveBeenCalled();
+    expect(mockClient.listRoles).toHaveBeenCalledWith({ ids: '1,2,3', items: 200 });
     expect(result).toEqual([1, 2, 3]);
+  });
+
+  it('throws when a numeric role ID does not exist', async () => {
+    vi.mocked(mockClient.listRoles).mockResolvedValue([{ id: 1, name: 'A' }] as any);
+    await expect(resolveRoleIds(mockClient, ['1', '9999'])).rejects.toThrow(
+      /No role found with ID 9999/
+    );
   });
 
   it('resolves names exactly and case-insensitively via listRoles search', async () => {
@@ -118,14 +130,14 @@ describe('resolveRoleIds', () => {
     expect(result).toEqual([2]);
   });
 
-  it('mixes numeric IDs and resolved names', async () => {
+  it('mixes numeric IDs and resolved names (numerics first)', async () => {
     vi.mocked(mockClient.listRoles).mockResolvedValue([{ id: 2, name: 'API User' }] as any);
 
-    const result = await resolveRoleIds(mockClient, ['5', 'API User']);
-    expect(result).toEqual([5, 2]);
+    const result = await resolveRoleIds(mockClient, ['2', 'API User']);
+    expect(result).toEqual([2]);
   });
 
-  it('dedupes resolved IDs', async () => {
+  it('dedupes resolved IDs across numeric and name tokens', async () => {
     vi.mocked(mockClient.listRoles).mockResolvedValue([{ id: 2, name: 'API User' }] as any);
     const result = await resolveRoleIds(mockClient, ['API User', '2', 'api user']);
     expect(result).toEqual([2]);
@@ -148,8 +160,10 @@ describe('resolveRoleIds', () => {
     );
   });
 
-  it('returns [] for empty values', async () => {
-    await expect(resolveRoleIds(mockClient, [])).resolves.toEqual([]);
+  it('returns [] for empty values without calling the API', async () => {
+    const result = await resolveRoleIds(mockClient, []);
+    expect(mockClient.listRoles).not.toHaveBeenCalled();
+    expect(result).toEqual([]);
   });
 });
 

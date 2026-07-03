@@ -68,6 +68,12 @@ export function userFullName(user: Record<string, unknown>): string {
 /**
  * Collect role IDs from a user's `user_team_roles` entries. Tolerant of
  * missing or malformed data; returns [] when there is nothing to extract.
+ *
+ * Typed as `Record<string, unknown>` (not the exported `User` type) on purpose:
+ * `user_team_roles`/`role_ids` are populated by the live `GET /users` response
+ * (the backend User model's default include reshapes team roles into
+ * `{ team_id, role_ids: number[] }[]`) but are absent from the generated
+ * OpenAPI schema, so a typed field access is not available here.
  */
 export function userGlobalRoleIds(user: Record<string, unknown>): number[] {
   const entries = user.user_team_roles;
@@ -97,23 +103,52 @@ function matchesField(candidate: string, values: string[] | undefined, contains:
 }
 
 /**
- * Resolve role flag values to role IDs. Numeric tokens are used directly; names
- * are matched exactly and case-insensitively against `listRoles({ search })`.
- * Errors on no or multiple exact matches. Result is deduped, preserving
- * first-seen order.
+ * Resolve role flag values to role IDs. Numeric tokens are validated to exist
+ * (via a single batched `listRoles({ ids })` lookup); names are matched exactly
+ * and case-insensitively against `listRoles({ search })`. Errors on unknown IDs
+ * and on no/multiple name matches. Result is deduped, preserving first-seen
+ * order.
  */
 export async function resolveRoleIds(client: APIClient, values: string[]): Promise<number[]> {
   const ids: number[] = [];
   const seen = new Set<number>();
+
+  const add = (id: number): void => {
+    if (!seen.has(id)) {
+      seen.add(id);
+      ids.push(id);
+    }
+  };
+
+  const numericIds: number[] = [];
+  const names: string[] = [];
   for (const value of values) {
     const id = Number(value);
     if (Number.isFinite(id) && String(id) === value.trim()) {
-      if (!seen.has(id)) {
-        seen.add(id);
-        ids.push(id);
-      }
-      continue;
+      numericIds.push(id);
+    } else {
+      names.push(value);
     }
+  }
+
+  // Validate numeric IDs in one batch so a typo'd ID errors instead of
+  // silently matching zero users, symmetric with name resolution below.
+  if (numericIds.length > 0) {
+    const found = (await client.listRoles({
+      ids: numericIds.join(','),
+      items: USER_FILTER_SCAN_PAGE_SIZE,
+    })) as Array<Record<string, unknown>>;
+    const foundIds = new Set(found.map((r) => Number(r.id)));
+    const missing = numericIds.filter((id) => !foundIds.has(id));
+    if (missing.length > 0) {
+      throw new Error(
+        `No role found with ID ${missing.join(', ')}. Check the role ID(s) with \`abs roles list\`.`
+      );
+    }
+    for (const id of numericIds) add(id);
+  }
+
+  for (const value of names) {
     const roles = (await client.listRoles({
       search: value,
       items: USER_FILTER_SCAN_PAGE_SIZE,
@@ -130,12 +165,9 @@ export async function resolveRoleIds(client: APIClient, values: string[]): Promi
         `Multiple roles match name "${value}":\n${candidates}\nUse a numeric role ID to disambiguate.`
       );
     }
-    const resolvedId = Number(exact[0]!.id);
-    if (!seen.has(resolvedId)) {
-      seen.add(resolvedId);
-      ids.push(resolvedId);
-    }
+    add(Number(exact[0]!.id));
   }
+
   return ids;
 }
 

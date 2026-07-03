@@ -130,6 +130,40 @@ describe('users command', () => {
     expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('200 results (filtered)'));
   });
 
+  it('should paginate the client-filtered matched set (--page 2)', async () => {
+    // 250 matching users spread across two scan pages (200 + 50); --items 20 --page 2
+    // should return matched[20..40).
+    const page1 = Array.from({ length: 200 }, (_, i) => ({ id: i + 1, department: 'Ancillaries' }));
+    const page2 = Array.from({ length: 50 }, (_, i) => ({
+      id: i + 201,
+      department: 'Ancillaries',
+    }));
+    vi.mocked(mockClient.listUsers)
+      .mockResolvedValueOnce(page1 as any)
+      .mockResolvedValueOnce(page2 as any);
+    vi.mocked(mockClient.listRoles).mockResolvedValue([] as any);
+
+    await usersCommand.parseAsync([
+      'node',
+      'test',
+      'list',
+      '--department',
+      'Ancillaries',
+      '--items',
+      '20',
+      '--page',
+      '2',
+    ]);
+
+    const printed = vi.mocked(printFormatted).mock.calls[0]![0] as Array<Record<string, unknown>>;
+    // Second page of 20: ids 21..40.
+    expect(printed).toHaveLength(20);
+    expect(printed[0]!.id).toBe(21);
+    expect(printed[19]!.id).toBe(40);
+    // Footer still reports the full matched count.
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('250 results (filtered)'));
+  });
+
   it('should resolve role names and filter by role id', async () => {
     const page1 = [
       { id: 1, first_name: 'Alice', user_team_roles: [{ role_ids: [2] }] },
