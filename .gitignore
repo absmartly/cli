@@ -50,3 +50,4 @@ docs/plans/
 docs/
 PLAN-*.md
 .worktrees/
+.superpowers/

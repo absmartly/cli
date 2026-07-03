@@ -1,6 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Command } from 'commander';
-import { addPaginationOptions, printPaginationFooter, printMetricFooter } from './pagination.js';
+import {
+  addPaginationOptions,
+  printPaginationFooter,
+  printMetricFooter,
+  printFilteredFooter,
+} from './pagination.js';
 
 describe('addPaginationOptions', () => {
   it('should add --items and --page options to a Command', () => {
@@ -47,6 +52,52 @@ describe('printPaginationFooter', () => {
     const output = logSpy.mock.calls[0][0] as string;
     expect(output).toContain('5 results');
     expect(output).not.toContain('Next:');
+  });
+});
+
+describe('printFilteredFooter', () => {
+  let logSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    logSpy.mockRestore();
+  });
+
+  it('shows a plain count when page/items are omitted', () => {
+    printFilteredFooter(5);
+    const output = logSpy.mock.calls[0]![0] as string;
+    expect(output).toContain('5 results (filtered).');
+    expect(output).not.toContain('page');
+  });
+
+  it('shows a plain count when total fits on one page', () => {
+    printFilteredFooter(5, 'table', 1, 20);
+    const output = logSpy.mock.calls[0]![0] as string;
+    expect(output).toContain('5 results (filtered).');
+    expect(output).not.toContain('page');
+  });
+
+  it('shows page X/Y and a Next hint when total exceeds one page', () => {
+    printFilteredFooter(250, 'table', 2, 20);
+    const output = logSpy.mock.calls[0]![0] as string;
+    expect(output).toContain('250 results (filtered) — page 2/13.');
+    expect(output).toContain('Next: --page 3');
+  });
+
+  it('omits the Next hint on the last page', () => {
+    printFilteredFooter(40, 'table', 2, 20);
+    const output = logSpy.mock.calls[0]![0] as string;
+    expect(output).toContain('page 2/2');
+    expect(output).not.toContain('Next:');
+  });
+
+  it('prints nothing for json/yaml output', () => {
+    printFilteredFooter(250, 'json', 1, 20);
+    printFilteredFooter(250, 'yaml', 1, 20);
+    expect(logSpy).not.toHaveBeenCalled();
   });
 });
 

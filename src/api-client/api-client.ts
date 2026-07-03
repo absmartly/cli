@@ -778,7 +778,15 @@ export class APIClient {
   }
 
   async listUsers(
-    options: { includeArchived?: boolean; search?: string; items?: number; page?: number } = {}
+    options: {
+      includeArchived?: boolean;
+      search?: string;
+      sort?: string;
+      sort_asc?: boolean;
+      ids?: string;
+      items?: number;
+      page?: number;
+    } = {}
   ): Promise<User[]> {
     const params: Record<string, string> = {
       items: String(options.items ?? 100),
@@ -786,6 +794,9 @@ export class APIClient {
     };
     if (options.includeArchived) params.include_archived = '1';
     if (options.search) params.search = options.search;
+    if (options.sort) params.sort = options.sort;
+    if (options.sort_asc !== undefined) params.sort_asc = String(options.sort_asc);
+    if (options.ids) params.ids = options.ids;
     const response = await this.request('GET', '/users', { params });
     return this.validateListResponse<User>(response, 'users', 'listUsers');
   }

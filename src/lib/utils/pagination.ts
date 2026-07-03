@@ -21,9 +21,20 @@ export function printPaginationFooter(
   console.log(chalk.gray(footer));
 }
 
-export function printFilteredFooter(count: number, outputFormat?: string): void {
+export function printFilteredFooter(
+  count: number,
+  outputFormat?: string,
+  page?: number,
+  items?: number
+): void {
   if (outputFormat === 'json' || outputFormat === 'yaml') return;
-  console.log(chalk.gray(`${count} result${count === 1 ? '' : 's'} (filtered).`));
+  let footer = `${count} result${count === 1 ? '' : 's'} (filtered).`;
+  if (page !== undefined && items !== undefined && count > items) {
+    const totalPages = Math.max(1, Math.ceil(count / items));
+    footer = `${count} results (filtered) — page ${page}/${totalPages}.`;
+    if (page < totalPages) footer += ` Next: --page ${page + 1}`;
+  }
+  console.log(chalk.gray(footer));
 }
 
 export function printMetricFooter(

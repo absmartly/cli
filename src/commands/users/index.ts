@@ -13,7 +13,11 @@ import {
   type GlobalOptions,
 } from '../../lib/utils/api-helper.js';
 import { parseUserId } from '../../lib/utils/validators.js';
-import { addPaginationOptions, printPaginationFooter } from '../../lib/utils/pagination.js';
+import {
+  addPaginationOptions,
+  printPaginationFooter,
+  printFilteredFooter,
+} from '../../lib/utils/pagination.js';
 import { renderInlineImage, supportsInlineImages } from '../../lib/utils/terminal-image.js';
 import type { UserId } from '../../lib/api/branded-types.js';
 import {
@@ -30,6 +34,16 @@ import {
   updateUser as coreUpdateUser,
   archiveUser as coreArchiveUser,
 } from '../../core/users/index.js';
+import {
+  parseFilterValues,
+  hasClientFilters,
+  resolveRoleIds,
+  fetchAllUsers,
+  filterUsers,
+  buildRoleNameMap,
+  formatUserRoles,
+  type UserClientFilters,
+} from '../../core/users/filter.js';
 import { resetPasswordCommand } from './reset-password.js';
 import { userApiKeysCommand } from './api-keys.js';
 
@@ -71,6 +85,23 @@ const listCommand = addPaginationOptions(
   new Command('list')
     .description('List all users')
     .option('--include-archived', 'include archived users')
+    .option('--search <query>', 'server-side fuzzy search across name/email/department/job_title')
+    .option('--sort <field>', 'sort by field (e.g. email, created_at)')
+    .option('--asc', 'sort in ascending order')
+    .option('--desc', 'sort in descending order')
+    .option('--ids <ids>', 'filter by user IDs (comma-separated)')
+    .option(
+      '--department <values>',
+      'filter by department, exact match (comma-separated; use --contains for substring)'
+    )
+    .option('--role <values>', 'filter by role name or ID (comma-separated; scans all users)')
+    .option('--job-title <values>', 'filter by job title, exact match (comma-separated)')
+    .option('--email <values>', 'filter by email, exact match (comma-separated)')
+    .option('--name <values>', 'filter by full name, exact match (comma-separated)')
+    .option(
+      '--contains',
+      'match --department/--job-title/--email/--name as substrings (case-insensitive)'
+    )
     .option(
       '--show-avatars [cols]',
       'display avatars inline, optional width in columns (default: 3)',
@@ -82,12 +113,71 @@ const listCommand = addPaginationOptions(
     const client = await getAPIClientFromOptions(globalOptions);
     const { show = [], exclude = [], showOnly } = globalOptions;
 
-    const result = await coreListUsers(client, {
-      includeArchived: options.includeArchived,
-      items: options.items,
-      page: options.page,
+    const clientFiltersActive = hasClientFilters({
+      department: options.department,
+      role: options.role,
+      jobTitle: options.jobTitle,
+      email: options.email,
+      name: options.name,
     });
-    const users = result.data;
+
+    const sortAsc = options.asc ? true : options.desc ? false : undefined;
+    // The roles column is about the field filters (it explains why rows matched a
+    // role/department query); native --search/--ids don't warrant a full roles scan.
+    const rolesColumnActive = clientFiltersActive;
+
+    // Parse a filter flag, erroring if it was given but reduced to nothing (e.g.
+    // `--department " , "`) rather than silently returning the full unfiltered list.
+    const parseFilterFlag = (flag: string, raw: string): string[] => {
+      const values = parseFilterValues(raw);
+      if (values.length === 0) {
+        throw new Error(`${flag} was given no usable values (got "${raw}").`);
+      }
+      return values;
+    };
+
+    // Resolve client-side filter values up front (role names -> IDs).
+    const filters: UserClientFilters = {};
+    if (options.department)
+      filters.department = parseFilterFlag('--department', options.department);
+    if (options.role)
+      filters.roleIds = await resolveRoleIds(client, parseFilterFlag('--role', options.role));
+    if (options.jobTitle) filters.jobTitle = parseFilterFlag('--job-title', options.jobTitle);
+    if (options.email) filters.email = parseFilterFlag('--email', options.email);
+    if (options.name) filters.name = parseFilterFlag('--name', options.name);
+
+    let users: unknown[];
+    let total: number | undefined;
+
+    if (clientFiltersActive) {
+      // Scan all pages honoring native filters, then apply client predicates and
+      // paginate the matched set client-side (consistent with --metric on
+      // experiments list, PR #47). The API has no server-side department/role
+      // filter, so this is the only way to satisfy exact + multi-value asks.
+      const scanOptions = {
+        ...(options.includeArchived && { includeArchived: true }),
+        ...(options.search && { search: options.search }),
+        ...(options.sort && { sort: options.sort }),
+        ...(sortAsc !== undefined && { sort_asc: sortAsc }),
+        ...(options.ids && { ids: options.ids }),
+      };
+      const all = await fetchAllUsers(client, scanOptions);
+      const matched = filterUsers(all, filters, { contains: options.contains });
+      total = matched.length;
+      const start = (options.page - 1) * options.items;
+      users = matched.slice(start, start + options.items);
+    } else {
+      const result = await coreListUsers(client, {
+        includeArchived: options.includeArchived,
+        items: options.items,
+        page: options.page,
+        ...(options.search && { search: options.search }),
+        ...(options.sort && { sort: options.sort }),
+        ...(sortAsc !== undefined && { sortAsc }),
+        ...(options.ids && { ids: options.ids }),
+      });
+      users = result.data;
+    }
 
     const wantAvatars =
       options.showAvatars !== undefined &&
@@ -95,6 +185,25 @@ const listCommand = addPaginationOptions(
       !globalOptions.raw &&
       globalOptions.output !== 'json' &&
       globalOptions.output !== 'yaml';
+
+    // Roles column: shown when a client field filter is active, resolved from an
+    // up-front scan of all roles (200/page). Only global-team roles appear, since
+    // the /users list response only includes user_team_roles for the global team.
+    let roleNames: Map<number, string> | undefined;
+    if (
+      rolesColumnActive &&
+      !globalOptions.raw &&
+      globalOptions.output !== 'json' &&
+      globalOptions.output !== 'yaml'
+    ) {
+      roleNames = await buildRoleNameMap(client);
+    }
+
+    const summarizeWithRoles = (u: Record<string, unknown>): Record<string, unknown> => {
+      const row = summarizeUserRow(u);
+      if (roleNames) row.roles = formatUserRoles(u, roleNames);
+      return row;
+    };
 
     if (wantAvatars) {
       const avatarWidth = typeof options.showAvatars === 'number' ? options.showAvatars : 3;
@@ -129,7 +238,7 @@ const listCommand = addPaginationOptions(
       );
 
       const rows = (users as Array<Record<string, unknown>>).map((u) =>
-        applyShowExclude(summarizeUserRow(u), u, show, exclude, showOnly)
+        applyShowExclude(summarizeWithRoles(u), u, show, exclude, showOnly)
       );
       const keys = rows.length > 0 ? Object.keys(rows[0]!) : [];
 
@@ -178,17 +287,21 @@ const listCommand = addPaginationOptions(
       const data = globalOptions.raw
         ? users
         : (users as Array<Record<string, unknown>>).map((u) =>
-            applyShowExclude(summarizeUserRow(u), u, show, exclude, showOnly)
+            applyShowExclude(summarizeWithRoles(u), u, show, exclude, showOnly)
           );
       printFormatted(data, globalOptions);
     }
 
-    printPaginationFooter(
-      users.length,
-      options.items,
-      options.page,
-      globalOptions.output as string
-    );
+    if (clientFiltersActive && total !== undefined) {
+      printFilteredFooter(total, globalOptions.output as string, options.page, options.items);
+    } else {
+      printPaginationFooter(
+        users.length,
+        options.items,
+        options.page,
+        globalOptions.output as string
+      );
+    }
   })
 );
 
