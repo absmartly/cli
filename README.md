@@ -1012,11 +1012,26 @@ Aliases: `users`, `user`
 ```bash
 abs users list
 abs users list --include-archived
+abs users list --search alice                          # server-side fuzzy search across name/email/department/job_title
+abs users list --sort email --asc                     # sort by a field
+abs users list --ids 1,2,3                             # filter by user IDs
 abs users get 123
 abs users create --email user@example.com --name "Jane Doe"
 abs users update 123 --name "Jane Smith"
 abs users archive 123
 abs users archive 123 --unarchive
+
+# Filter users by department, role, job title, email, or name (multi-value, exact by default)
+abs users list --department Ancillaries                       # everyone in Ancillaries
+abs users list --department Ancillaries,Finance              # Ancillaries OR Finance
+abs users list --role "API User"                             # everyone with the API User role (name or numeric ID)
+abs users list --role "API User",Admin --department Ancillaries  # role AND department
+abs users list --job-title CEO --department Ancillaries
+abs users list --email alice@acme.com,bob@acme.com
+abs users list --name "Alice Smith"
+abs users list --department anc --contains                  # substring match (case-insensitive) for department/job-title/email/name
+# When a filter is active, a `roles` column is shown; the API has no server-side
+# department/role filter, so client filters scan all users (200/page).
 
 # Reset password
 abs users reset-password 123
