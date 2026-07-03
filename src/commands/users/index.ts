@@ -122,16 +122,29 @@ const listCommand = addPaginationOptions(
     });
 
     const sortAsc = options.asc ? true : options.desc ? false : undefined;
-    const rolesColumnActive = clientFiltersActive || Boolean(options.search || options.ids);
+    // The roles column is about the field filters (it explains why rows matched a
+    // role/department query); native --search/--ids don't warrant a full roles scan.
+    const rolesColumnActive = clientFiltersActive;
+
+    // Parse a filter flag, erroring if it was given but reduced to nothing (e.g.
+    // `--department " , "`) rather than silently returning the full unfiltered list.
+    const parseFilterFlag = (flag: string, raw: string): string[] => {
+      const values = parseFilterValues(raw);
+      if (values.length === 0) {
+        throw new Error(`${flag} was given no usable values (got "${raw}").`);
+      }
+      return values;
+    };
 
     // Resolve client-side filter values up front (role names -> IDs).
     const filters: UserClientFilters = {};
-    if (options.department) filters.department = parseFilterValues(options.department);
+    if (options.department)
+      filters.department = parseFilterFlag('--department', options.department);
     if (options.role)
-      filters.roleIds = await resolveRoleIds(client, parseFilterValues(options.role));
-    if (options.jobTitle) filters.jobTitle = parseFilterValues(options.jobTitle);
-    if (options.email) filters.email = parseFilterValues(options.email);
-    if (options.name) filters.name = parseFilterValues(options.name);
+      filters.roleIds = await resolveRoleIds(client, parseFilterFlag('--role', options.role));
+    if (options.jobTitle) filters.jobTitle = parseFilterFlag('--job-title', options.jobTitle);
+    if (options.email) filters.email = parseFilterFlag('--email', options.email);
+    if (options.name) filters.name = parseFilterFlag('--name', options.name);
 
     let users: unknown[];
     let total: number | undefined;
@@ -173,8 +186,9 @@ const listCommand = addPaginationOptions(
       globalOptions.output !== 'json' &&
       globalOptions.output !== 'yaml';
 
-    // Roles column: shown when a filter is active (client or native search/ids),
-    // resolved from a single up-front GET /roles lookup.
+    // Roles column: shown when a client field filter is active, resolved from an
+    // up-front scan of all roles (200/page). Only global-team roles appear, since
+    // the /users list response only includes user_team_roles for the global team.
     let roleNames: Map<number, string> | undefined;
     if (
       rolesColumnActive &&
@@ -279,7 +293,7 @@ const listCommand = addPaginationOptions(
     }
 
     if (clientFiltersActive && total !== undefined) {
-      printFilteredFooter(total, globalOptions.output as string);
+      printFilteredFooter(total, globalOptions.output as string, options.page, options.items);
     } else {
       printPaginationFooter(
         users.length,

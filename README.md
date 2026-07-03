@@ -1030,8 +1030,9 @@ abs users list --job-title CEO --department Ancillaries
 abs users list --email alice@acme.com,bob@acme.com
 abs users list --name "Alice Smith"
 abs users list --department anc --contains                  # substring match (case-insensitive) for department/job-title/email/name
-# When a filter is active, a `roles` column is shown; the API has no server-side
-# department/role filter, so client filters scan all users (200/page).
+# When a field filter is active, a `roles` column (global-team roles) is shown;
+# the API has no server-side department/role filter, so client filters scan all
+# users (200/page) and paginate the matched set.
 
 # Reset password
 abs users reset-password 123

@@ -69,11 +69,15 @@ export function userFullName(user: Record<string, unknown>): string {
  * Collect role IDs from a user's `user_team_roles` entries. Tolerant of
  * missing or malformed data; returns [] when there is nothing to extract.
  *
+ * Flattens `role_ids` across all `user_team_roles` entries. For the `GET /users`
+ * list response this is effectively the user's global-team roles: the backend
+ * includes `user_team_roles` filtered to the global team only, so no per-entry
+ * `team_id` check is needed here.
+ *
  * Typed as `Record<string, unknown>` (not the exported `User` type) on purpose:
  * `user_team_roles`/`role_ids` are populated by the live `GET /users` response
- * (the backend User model's default include reshapes team roles into
- * `{ team_id, role_ids: number[] }[]`) but are absent from the generated
- * OpenAPI schema, so a typed field access is not available here.
+ * but are absent from the generated OpenAPI schema, so a typed field access is
+ * not available here.
  */
 export function userGlobalRoleIds(user: Record<string, unknown>): number[] {
   const entries = user.user_team_roles;

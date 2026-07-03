@@ -105,6 +105,21 @@ describe('users command', () => {
     );
   });
 
+  it('should not scan roles for native --search alone (no client field filter)', async () => {
+    await usersCommand.parseAsync(['node', 'test', 'list', '--search', 'alice']);
+
+    // Native path only; no roles column, so no GET /roles scan.
+    expect(mockClient.listRoles).not.toHaveBeenCalled();
+  });
+
+  it('should error when a filter flag parses to zero usable values', async () => {
+    await expect(
+      usersCommand.parseAsync(['node', 'test', 'list', '--department', ' , '])
+    ).rejects.toThrow('process.exit: 1');
+    const logged = consoleErrorSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+    expect(logged).toMatch(/--department was given no usable values/);
+  });
+
   it('should scan all pages and filter client-side for --department', async () => {
     const page1 = Array.from({ length: 200 }, (_, i) => ({ id: i + 1, department: 'Ancillaries' }));
     const page2 = [{ id: 201, department: 'Finance' }];
@@ -126,8 +141,10 @@ describe('users command', () => {
     const printed = vi.mocked(printFormatted).mock.calls[0]![0] as Array<Record<string, unknown>>;
     expect(printed).toHaveLength(20);
     expect(printed.every((r) => r.department === 'Ancillaries')).toBe(true);
-    // Filtered footer prints the full matched count, not a page footer.
-    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('200 results (filtered)'));
+    // Filtered footer prints the full matched count plus page info.
+    expect(consoleSpy).toHaveBeenCalledWith(
+      expect.stringContaining('200 results (filtered) — page 1/10')
+    );
   });
 
   it('should paginate the client-filtered matched set (--page 2)', async () => {
@@ -160,8 +177,10 @@ describe('users command', () => {
     expect(printed).toHaveLength(20);
     expect(printed[0]!.id).toBe(21);
     expect(printed[19]!.id).toBe(40);
-    // Footer still reports the full matched count.
-    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('250 results (filtered)'));
+    // Footer still reports the full matched count with page info.
+    expect(consoleSpy).toHaveBeenCalledWith(
+      expect.stringContaining('250 results (filtered) — page 2/13')
+    );
   });
 
   it('should resolve role names and filter by role id', async () => {
