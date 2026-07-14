@@ -149,4 +149,34 @@ describe('updateUser', () => {
       'At least one update field is required'
     );
   });
+
+  it('should update role alone as [{ role_id }]', async () => {
+    mockClient.updateUser.mockResolvedValue(undefined);
+
+    const result = await updateUser(mockClient, { id: 5 as any, role: '34' });
+
+    expect(mockClient.updateUser).toHaveBeenCalledWith(5, {
+      roles: [{ role_id: 34 }],
+    });
+    expect(result).toEqual({ data: undefined });
+  });
+
+  it('should update name and role together', async () => {
+    mockClient.updateUser.mockResolvedValue(undefined);
+
+    await updateUser(mockClient, { id: 7 as any, name: 'Jane Smith', role: '2' });
+
+    expect(mockClient.updateUser).toHaveBeenCalledWith(7, {
+      first_name: 'Jane',
+      last_name: 'Smith',
+      roles: [{ role_id: 2 }],
+    });
+  });
+
+  it('should throw on an invalid role value', async () => {
+    await expect(updateUser(mockClient, { id: 5 as any, role: 'admin' })).rejects.toThrow(
+      'Invalid role'
+    );
+    expect(mockClient.updateUser).not.toHaveBeenCalled();
+  });
 });
