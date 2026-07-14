@@ -44,6 +44,7 @@ export type GoalTag = components['schemas']['GoalTag'];
 export type Segment = components['schemas']['Segment'];
 export type Team = components['schemas']['Team'];
 export type User = components['schemas']['User'];
+export type UpdateUserData = components['schemas']['UpdateUserBody']['data'];
 export type Metric = components['schemas']['Metric'];
 export type MetricTag = components['schemas']['MetricTag'];
 export type MetricCategory = components['schemas']['MetricCategory'];

@@ -9,6 +9,7 @@ import type {
   Segment as OpenAPISegment,
   Team as OpenAPITeam,
   User as OpenAPIUser,
+  UpdateUserData,
   Metric as OpenAPIMetric,
   MetricTag as OpenAPIMetricTag,
   MetricCategory as OpenAPIMetricCategory,
@@ -216,6 +217,8 @@ export type User = Partial<OpenAPIUser> & {
   id: UserId;
   email: string;
 };
+
+export type { UpdateUserData };
 
 export type Metric = Partial<OpenAPIMetric> & {
   id: MetricId;

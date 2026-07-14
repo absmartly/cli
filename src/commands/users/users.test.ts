@@ -107,6 +107,14 @@ describe('users command', () => {
     });
   });
 
+  it('should update a user role via --role', async () => {
+    await usersCommand.parseAsync(['node', 'test', 'update', '1', '--role', '34']);
+
+    expect(mockClient.updateUser).toHaveBeenCalledWith(1, {
+      roles: [{ role_id: 34 }],
+    });
+  });
+
   it('should archive a user', async () => {
     await usersCommand.parseAsync(['node', 'test', 'archive', '1']);
 

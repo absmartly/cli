@@ -14,6 +14,7 @@ import type {
   Segment,
   Team,
   User,
+  UpdateUserData,
   Metric,
   Application,
   Environment,
@@ -755,7 +756,7 @@ export class APIClient {
     return this.validateEntityResponse<User>(response, 'user', 'createUser');
   }
 
-  async updateUser(id: UserId, data: Partial<User>): Promise<User> {
+  async updateUser(id: UserId, data: UpdateUserData): Promise<User> {
     const response = await this.request('PUT', `/users/${id}`, { data: { data } });
     return this.validateEntityResponse<User>(response, 'user', 'updateUser');
   }
