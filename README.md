@@ -2,21 +2,7 @@
 
 Command-line interface for AI agents and humans to manage experiments, feature flags, and A/B tests on the [ABSmartly](https://absmartly.com) platform.
 
-## Project status
-
-> **This project is experimental.** The core architecture is settled, but the API surface may change between releases.
-
-| Area | Status |
-|---|---|
-| Experiment commands (list, get, create, update, start, stop, restart, clone, bulk) | Stable — well tested |
-| Metric results, CI bars, segment breakdowns | Stable |
-| Template round-trip (export → edit → create/update) | Stable |
-| Core layer (`@absmartly/cli/core/*`) for programmatic use | Stable — 444 unit tests |
-| Admin commands (tags, roles, teams, users, webhooks, etc.) | Mostly stable — less battle-tested |
-| OAuth authentication | Working — tested against live API |
-| Interactive editor (`--interactive` / `-i` flag) | **Experimental** — known issues, not production-ready |
-| Shell completions | Working — may have gaps |
-| Unix pipe composition | Stable |
+## Install
 
 ```bash
 bun install -g @absmartly/cli
@@ -177,7 +163,7 @@ Aliases: `experiments`, `experiment`, `exp`, `features`, `feature`
 
 Use `abs features` instead of `abs experiments` to auto-filter by `type=feature`.
 
-All experiment commands accept **names or IDs** — e.g. `abs experiments get checkout_redesign` resolves the name to the latest iteration's ID automatically.
+All experiment commands accept **names or IDs**. For example, `abs experiments get checkout_redesign` resolves the name to the latest iteration's ID automatically.
 
 ```bash
 # List experiments with filters and pagination
@@ -378,7 +364,7 @@ abs experiments list --search e2e- --state running | abs experiments stop --reas
 # Pipe to bulk (auto-detects stdin)
 abs experiments list --state running --app my-app | abs experiments bulk stop --reason other
 
-# Interactive mode — prompts for note (uses dashboard config for defaults/required)
+# Interactive mode: prompts for note (uses dashboard config for defaults/required)
 abs experiments stop 123 -i
 abs experiments archive 123 -i
 
@@ -408,16 +394,16 @@ The output has nine top-level sections:
 | Section | What it contains |
 |---|---|
 | `experiment` | Headline facts: `name`, `state`, `hypothesis`, `primary_metric_name`, `participant_count`, `leading_variant_*`, `current_recommended_action`, `report_note`. |
-| `alerts` | Active alerts (`{id, type, dismissed}`) — `srm`, `audience_mismatch`, `cleanup_needed`, etc. |
+| `alerts` | Active alerts (`{id, type, dismissed}`): `srm`, `audience_mismatch`, `cleanup_needed`, etc. |
 | `recommendation` | The single best deterministic recommendation (`{theme, title, details}`) picked from the heuristic rule set, or `null`. Warnings outrank successes. |
 | `metric_signals` | Per-metric / per-variant rows from `metrics_snapshot` with `percent_change`, `p_value`, CI bounds, and a derived `status`: `improves` / `contradicts` / `flat` / `inconclusive`. |
 | `related_experiments` | Up to 24 recent same-type experiments. For peers that share the primary metric, `leading_variant_impact_percent` is fetched and compared. |
 | `analysis_confidence` | `high` / `medium` / `low` plus 5 boolean factors and human-readable reasons. Captures *whether there's enough signal to analyze*. |
-| `design_readout` | Whether the experiment design fits the question — summary line, parameter pass-through, and a benchmark from related experiments when available. |
+| `design_readout` | Whether the experiment design fits the question: summary line, parameter pass-through, and a benchmark from related experiments when available. |
 | `source_signals` | Audit trail mapping each derived field to its API source path (e.g. `experiment.metrics_snapshot.rows[*].percent_change`). Useful for verifying AI analyses. |
 | `heuristic_output` | All 9 heuristic rules with `{rule, fired, theme, title, details, evidence}`. The starting point for an AI analysis when one is available. |
 
-**Example output** (illustrative — a running experiment with a metric snapshot, two comparable peers, a primary-metric win, and a contradicting guardrail):
+**Example output** (illustrative: a running experiment with a metric snapshot, two comparable peers, a primary-metric win, and a contradicting guardrail):
 
 ```json
 {
@@ -573,12 +559,12 @@ Notice how the sections reinforce each other in this example:
 
 - `metric_signals` shows the primary metric improving (`status: improves`) AND a guardrail contradicting (`status: contradicts`).
 - That guardrail status drives `heuristic_output[guardrail_contradicts].fired = true` (theme `warning`).
-- Both `guardrail_contradicts` (warning) and `primary_metric_significant_win` (success) fired. `recommendation` is the first fired warning, so the headline becomes "Review guardrail regressions…" — even though the primary metric is winning.
+- Both `guardrail_contradicts` (warning) and `primary_metric_significant_win` (success) fired. `recommendation` is the first fired warning, so the headline becomes "Review guardrail regressions…", even though the primary metric is winning.
 - `analysis_confidence` is `high`: all five factors are true (sample size reached, hypothesis present, primary metric present, guardrails present, no blocking alerts).
 - `design_readout.benchmark.median_abs_impact` (3.35%) is computed from the two comparable peers; the summary phrasing "designed to detect effects in the expected range" follows because the median is ≥ 1.5× the MDE (2.5%).
-- `source_signals` records one entry per derived field plus per peer-fetch — the audit trail an LLM analyst can cite.
+- `source_signals` records one entry per derived field plus per peer-fetch, the audit trail an LLM analyst can cite.
 
-**Example — distilled view via jq:**
+**Example: distilled view via jq:**
 
 ```bash
 $ abs experiments analyze 18234 \
@@ -692,7 +678,7 @@ abs experiments list --state running | head -5 | abs experiments stop --reason o
 
 When piped, status messages (✓ Experiment N stopped) go to stderr so they don't interfere with the ID stream on stdout. Use `-o json` or `-o yaml` to get full structured output even when piped.
 
-By default, failed IDs are **not** passed through the pipe — only successfully processed IDs flow to the next command. Use `--pass-through` to pass all IDs (including failures) so a downstream command can attempt its own operation:
+By default, failed IDs are **not** passed through the pipe: only successfully processed IDs flow to the next command. Use `--pass-through` to pass all IDs (including failures) so a downstream command can attempt its own operation:
 
 ```bash
 # Default: only successfully stopped experiments get archived
@@ -820,7 +806,7 @@ The `--reason` option for `stop` and `restart` accepts these values:
 
 The `abs experiments schedule create --action` option accepts: `start`, `restart`, `development`, `stop`, `archive`, `full_on`.
 
-The `--at` timestamp must include a timezone — either `Z` (UTC) or an offset like `+02:00`. The time must be in the future.
+The `--at` timestamp must include a timezone, either `Z` (UTC) or an offset like `+02:00`. The time must be in the future.
 
 ```bash
 abs experiments schedule create 123 --action start --at 2027-01-15T10:00:00Z
@@ -971,7 +957,7 @@ abs metrics access revoke-user 123 --user 1 --role 2
 
 #### Metric list filters (client-side)
 
-These filters run client-side: when any is set, the CLI fetches every metric and filters locally. They combine with AND across flags and OR within a comma-separated list. Because the full set is fetched and filtered, `--items`/`--page` do not apply while filtering — every match is shown. (Server-side equivalents are a planned follow-up.)
+These filters run client-side: when any is set, the CLI fetches every metric and filters locally. They combine with AND across flags and OR within a comma-separated list. Because the full set is fetched and filtered, `--items`/`--page` do not apply while filtering, and every match is shown. (Server-side equivalents are a planned follow-up.)
 
 | Filter | Description |
 |---|---|
@@ -1498,7 +1484,7 @@ API key resolution order: `--api-key` flag > `ABSMARTLY_API_KEY` env > OS keycha
 ## Experiment templates
 
 The CLI uses Markdown templates with YAML frontmatter for experiment round-trips.
-All names (metrics, owners, teams, tags, applications) are resolved by name — no IDs needed.
+All names (metrics, owners, teams, tags, applications) are resolved by name, so no IDs are needed.
 
 ```bash
 # Generate a blank template
@@ -1609,7 +1595,7 @@ Template features:
 
 ## Programmatic usage
 
-The package exports a framework-free core layer that can be used programmatically without Commander.js or any CLI dependencies. The core functions are tree-shakeable — import only what you need.
+The package exports a framework-free core layer that can be used programmatically without Commander.js or any CLI dependencies. The core functions are tree-shakeable, so you import only what you need.
 
 ### Exports
 
@@ -1695,11 +1681,11 @@ function operation(client: APIClient, params: OperationParams): Promise<CommandR
 - **First argument** is always the `APIClient` instance
 - **Second argument** is a typed params object
 - **Return value** is always `CommandResult<T>` with:
-  - `data: T` — the primary result
-  - `warnings?: string[]` — optional warnings
-  - `pagination?: { page, items, hasMore }` — for list operations
-  - `rows?: Record<string, unknown>[]` — optional tabular view
-  - `detail?: Record<string, unknown>` — optional detail view
+  - `data: T`, the primary result
+  - `warnings?: string[]`, optional warnings
+  - `pagination?: { page, items, hasMore }`, for list operations
+  - `rows?: Record<string, unknown>[]`, optional tabular view
+  - `detail?: Record<string, unknown>`, optional detail view
 
 Validation errors throw with descriptive messages listing valid values (e.g., stop reasons, schedule actions).
 
@@ -1740,10 +1726,10 @@ USE_LIVE_API=1 bun run test:run
 ```
 
 The test suite includes:
-- **Command-layer tests** (`src/commands/`) — test CLI behavior through Commander.js
-- **Core-layer tests** (`src/core/`) — test business logic with mocked API clients
-- **API client tests** (`src/api-client/`) — test request building and response parsing
-- **Library tests** (`src/lib/`) — test utilities, config, auth, and formatting
+- **Command-layer tests** (`src/commands/`) test CLI behavior through Commander.js
+- **Core-layer tests** (`src/core/`) test business logic with mocked API clients
+- **API client tests** (`src/api-client/`) test request building and response parsing
+- **Library tests** (`src/lib/`) test utilities, config, auth, and formatting
 
 ### Linting and formatting
 
