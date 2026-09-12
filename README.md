@@ -642,6 +642,29 @@ abs experiments restart 123 --hypothesis "New iteration"
 abs experiments create --name test --field "Hypothesis=We believe X"
 ```
 
+Custom field values are sent to the API as an object keyed by each field's numeric id (e.g. `{"75": {"type": "boolean", "value": "false"}}`), not as an array — the CLI builds this shape for you, so you never need to construct it by hand. If you're calling the API directly (e.g. from your own script or a custom MCP server) and want to see the exact payload the CLI sends, add `--show-request`:
+
+```bash
+abs experiments update 123 --field "Hypothesis=Updated hypothesis" --show-request
+# → PUT https://your-instance.absmartly.io/experiments/123
+#   Accept: application/json
+#   Content-Type: application/json
+#   Authorization: Api-Key ***
+#   User-Agent: absmartly-cli/1.14.0
+#
+#   {
+#     "id": 123,
+#     "data": {
+#       ...
+#       "custom_section_field_values": {
+#         "12": { "type": "string", "value": "Updated hypothesis" }
+#       }
+#     }
+#   }
+```
+
+This is the fastest way to confirm the exact shape a working request has, if you're getting an "Unknown or read-only fields" or "custom field values are required" error while integrating directly against the REST API.
+
 #### Summary output
 
 All `list` and `get` commands return summarized output by default. Use `--raw` for the full API response.
