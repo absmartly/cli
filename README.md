@@ -663,8 +663,6 @@ abs experiments update 123 --field "Hypothesis=Updated hypothesis" --show-reques
 #   }
 ```
 
-This is the fastest way to confirm the exact shape a working request has, if you're getting an "Unknown or read-only fields" or "custom field values are required" error while integrating directly against the REST API.
-
 #### Summary output
 
 All `list` and `get` commands return summarized output by default. Use `--raw` for the full API response.
