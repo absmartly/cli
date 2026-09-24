@@ -32,11 +32,7 @@ const listCommand = new Command('list')
         limit: options.limit,
       });
       printFormatted(result.data, globalOptions);
-      if (
-        result.warnings &&
-        globalOptions.output !== 'json' &&
-        globalOptions.output !== 'yaml'
-      ) {
+      if (result.warnings && globalOptions.output !== 'json' && globalOptions.output !== 'yaml') {
         for (const w of result.warnings) {
           console.log(chalk.gray(w));
         }
