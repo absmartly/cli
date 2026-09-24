@@ -85,7 +85,31 @@ describe('getUser', () => {
     const result = await getUser(mockClient, { id: 5 as any });
 
     expect(mockClient.getUser).toHaveBeenCalledWith(5);
-    expect(result).toEqual({ data: user });
+    expect(result.data).toMatchObject({ id: 5, email: 'a@b.com' });
+  });
+});
+
+describe('getUser summarization', () => {
+  const user = {
+    id: 5,
+    email: 'u@x.com',
+    first_name: 'U',
+    last_name: 'Ser',
+    archived: false,
+    roles: [{ id: 1, permissions: ['huge array'] }],
+  };
+
+  it('returns summarized data by default', async () => {
+    mockClient.getUser.mockResolvedValue(user);
+    const result = await getUser(mockClient, { id: 5 as any });
+    expect(result.data).not.toHaveProperty('roles');
+    expect(result.data).toMatchObject({ id: 5, email: 'u@x.com', name: 'U Ser' });
+  });
+
+  it('returns raw data when raw=true', async () => {
+    mockClient.getUser.mockResolvedValue(user);
+    const result = await getUser(mockClient, { id: 5 as any, raw: true });
+    expect(result.data).toEqual(user);
   });
 });
 
@@ -143,6 +167,39 @@ describe('listUsers', () => {
     await listUsers(mockClient, { items: 10, page: 2 });
 
     expect(mockClient.listUsers).toHaveBeenCalledWith({ items: 10, page: 2 });
+  });
+});
+
+describe('listUsers rows', () => {
+  it('should include summarized rows', async () => {
+    const users = [
+      { id: 1, email: 'a@x.com', first_name: 'A', last_name: 'One', archived: false },
+      { id: 2, email: 'b@x.com', first_name: 'B', last_name: 'Two', archived: true },
+    ];
+    mockClient.listUsers.mockResolvedValue(users);
+
+    const result = await listUsers(mockClient, { items: 10, page: 1 });
+
+    expect(result.rows).toEqual([
+      {
+        id: 1,
+        email: 'a@x.com',
+        name: 'A One',
+        department: '',
+        job_title: '',
+        archived: false,
+        last_login: '',
+      },
+      {
+        id: 2,
+        email: 'b@x.com',
+        name: 'B Two',
+        department: '',
+        job_title: '',
+        archived: true,
+        last_login: '',
+      },
+    ]);
   });
 });
 
