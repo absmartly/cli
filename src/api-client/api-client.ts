@@ -2001,8 +2001,11 @@ export class APIClient {
     return this.validateEntityResponse<unknown>(response, 'config', 'updatePlatformConfig');
   }
 
-  async listCorsOrigins(): Promise<unknown[]> {
-    const response = await this.request('GET', '/cors');
+  async listCorsOrigins(options: { items?: number; page?: number } = {}): Promise<unknown[]> {
+    const params: Record<string, string> = {};
+    if (options.items !== undefined) params.items = String(options.items);
+    if (options.page !== undefined) params.page = String(options.page);
+    const response = await this.request('GET', '/cors', { params });
     return this.validateListResponse<unknown>(response, 'cors_allowed_origins', 'listCorsOrigins');
   }
 
