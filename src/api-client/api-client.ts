@@ -1764,8 +1764,13 @@ export class APIClient {
     await this.request('DELETE', `/goals/${id}/asset_role_teams/${teamId}/${assetRoleId}`);
   }
 
-  async listAssetRoles(): Promise<AssetRole[]> {
-    const response = await this.request('GET', '/asset_roles');
+  async listAssetRoles(
+    options: { items?: number; page?: number } = {}
+  ): Promise<AssetRole[]> {
+    const params: Record<string, string> = {};
+    if (options.items !== undefined) params.items = String(options.items);
+    if (options.page !== undefined) params.page = String(options.page);
+    const response = await this.request('GET', '/asset_roles', { params });
     return this.validateListResponse<AssetRole>(response, 'asset_roles', 'listAssetRoles');
   }
 
