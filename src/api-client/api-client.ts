@@ -2579,8 +2579,13 @@ export class APIClient {
     return this.validateEntityResponse<User>(response, 'user', 'updateCurrentUser');
   }
 
-  async listExperimentActionDialogFields(): Promise<unknown[]> {
-    const response = await this.request('GET', '/experiment_action_dialog_fields');
+  async listExperimentActionDialogFields(
+    options: { items?: number; page?: number } = {}
+  ): Promise<unknown[]> {
+    const params: Record<string, string> = {};
+    if (options.items !== undefined) params.items = String(options.items);
+    if (options.page !== undefined) params.page = String(options.page);
+    const response = await this.request('GET', '/experiment_action_dialog_fields', { params });
     return this.validateListResponse<unknown>(
       response,
       'experiment_action_dialog_fields',
