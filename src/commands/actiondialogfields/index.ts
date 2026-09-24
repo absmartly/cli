@@ -7,6 +7,7 @@ import {
   withErrorHandling,
 } from '../../lib/utils/api-helper.js';
 import { validateJSON } from '../../lib/utils/validators.js';
+import { addPaginationOptions, printPaginationFooter } from '../../lib/utils/pagination.js';
 
 function parsePositiveInt(value: string): number {
   const parsed = parseInt(value, 10);
@@ -26,12 +27,23 @@ export const actionDialogFieldsCommand = new Command('action-dialog-fields')
   .aliases(['actiondialogfields'])
   .description('Action dialog field management');
 
-const listCommand = new Command('list').description('List action dialog fields').action(
-  withErrorHandling(async () => {
+const listCommand = addPaginationOptions(
+  new Command('list').description('List action dialog fields')
+).action(
+  withErrorHandling(async (options) => {
     const globalOptions = getGlobalOptions(listCommand);
     const client = await getAPIClientFromOptions(globalOptions);
-    const result = await coreListActionDialogFields(client);
+    const result = await coreListActionDialogFields(client, {
+      items: options.items,
+      page: options.page,
+    });
     printFormatted(result.data, globalOptions);
+    printPaginationFooter(
+      (result.data as unknown[]).length,
+      options.items,
+      options.page,
+      globalOptions.output as string
+    );
   })
 );
 
