@@ -6,6 +6,7 @@ import {
   printResult,
   withErrorHandling,
 } from '../../lib/utils/api-helper.js';
+import { addPaginationOptions, printPaginationFooter } from '../../lib/utils/pagination.js';
 import { parseCustomSectionId } from '../../lib/utils/validators.js';
 import type { CustomSectionId } from '../../lib/api/branded-types.js';
 import {
@@ -20,12 +21,23 @@ export const customSectionsCommand = new Command('custom-sections')
   .alias('customsections')
   .description('Experiment custom section commands');
 
-const listCommand = new Command('list').description('List all experiment custom sections').action(
-  withErrorHandling(async () => {
+const listCommand = addPaginationOptions(
+  new Command('list').description('List all experiment custom sections')
+).action(
+  withErrorHandling(async (options) => {
     const globalOptions = getGlobalOptions(listCommand);
     const client = await getAPIClientFromOptions(globalOptions);
-    const result = await listCustomSections(client);
+    const result = await listCustomSections(client, {
+      items: options.items,
+      page: options.page,
+    });
     printFormatted(result.data, globalOptions);
+    printPaginationFooter(
+      (result.data as unknown[]).length,
+      options.items,
+      options.page,
+      globalOptions.output as string
+    );
   })
 );
 
