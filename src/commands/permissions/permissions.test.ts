@@ -70,4 +70,38 @@ describe('permissions command', () => {
     expect(mockClient.listAccessControlPolicies).toHaveBeenCalled();
     expect(printFormatted).toHaveBeenCalled();
   });
+
+  it('should list permissions with pagination', async () => {
+    await permissionsCommand.parseAsync(['node', 'test', 'list', '--items', '10', '--page', '2']);
+
+    expect(mockClient.listPermissions).toHaveBeenCalledWith({ items: 10, page: 2 });
+  });
+
+  it('should list permission categories with pagination', async () => {
+    await permissionsCommand.parseAsync([
+      'node',
+      'test',
+      'categories',
+      '--items',
+      '10',
+      '--page',
+      '2',
+    ]);
+
+    expect(mockClient.listPermissionCategories).toHaveBeenCalledWith({ items: 10, page: 2 });
+  });
+
+  it('should list access control policies with pagination', async () => {
+    await permissionsCommand.parseAsync([
+      'node',
+      'test',
+      'policies',
+      '--items',
+      '10',
+      '--page',
+      '2',
+    ]);
+
+    expect(mockClient.listAccessControlPolicies).toHaveBeenCalledWith({ items: 10, page: 2 });
+  });
 });
