@@ -2151,8 +2151,11 @@ export class APIClient {
     );
   }
 
-  async listUpdateSchedules(): Promise<unknown[]> {
-    const response = await this.request('GET', '/experiment_update_schedules');
+  async listUpdateSchedules(options: { items?: number; page?: number } = {}): Promise<unknown[]> {
+    const params: Record<string, string> = {};
+    if (options.items !== undefined) params.items = String(options.items);
+    if (options.page !== undefined) params.page = String(options.page);
+    const response = await this.request('GET', '/experiment_update_schedules', { params });
     return this.validateListResponse<unknown>(
       response,
       'experiment_update_schedules',
