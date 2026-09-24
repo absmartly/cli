@@ -1,9 +1,21 @@
 import type { APIClient } from '../../api-client/api-client.js';
 import type { CommandResult } from '../types.js';
 
-export async function listStorageConfigs(client: APIClient): Promise<CommandResult<unknown>> {
-  const data = await client.listStorageConfigs();
-  return { data };
+const DEFAULT_LIST_PAGE_SIZE = 20;
+
+export interface ListStorageConfigsParams {
+  items?: number | undefined;
+  page?: number | undefined;
+}
+
+export async function listStorageConfigs(
+  client: APIClient,
+  params: ListStorageConfigsParams = {}
+): Promise<CommandResult<unknown>> {
+  const items = params.items ?? DEFAULT_LIST_PAGE_SIZE;
+  const page = params.page ?? 1;
+  const data = await client.listStorageConfigs({ items, page });
+  return { data, pagination: { page, items, hasMore: (data as unknown[]).length >= items } };
 }
 
 export interface GetStorageConfigParams {

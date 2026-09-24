@@ -2463,8 +2463,11 @@ export class APIClient {
     return response.data as { matrix: number[][] };
   }
 
-  async listStorageConfigs(): Promise<unknown[]> {
-    const response = await this.request('GET', '/storage_configs');
+  async listStorageConfigs(options: { items?: number; page?: number } = {}): Promise<unknown[]> {
+    const params: Record<string, string> = {};
+    if (options.items !== undefined) params.items = String(options.items);
+    if (options.page !== undefined) params.page = String(options.page);
+    const response = await this.request('GET', '/storage_configs', { params });
     return this.validateListResponse<unknown>(response, 'storage_configs', 'listStorageConfigs');
   }
 
