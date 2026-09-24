@@ -1025,10 +1025,20 @@ export class APIClient {
     });
   }
 
-  async listCustomSections(type?: string): Promise<unknown[]> {
-    const params: Record<string, string> = {};
-    if (type) params.type = type;
-    const response = await this.request('GET', '/experiment_custom_sections', { params });
+  async listCustomSections(
+    params: {
+      type?: string | undefined;
+      items?: number | undefined;
+      page?: number | undefined;
+    } = {}
+  ): Promise<unknown[]> {
+    const queryParams: Record<string, string> = {};
+    if (params.type) queryParams.type = params.type;
+    if (params.items !== undefined) queryParams.items = String(params.items);
+    if (params.page !== undefined) queryParams.page = String(params.page);
+    const response = await this.request('GET', '/experiment_custom_sections', {
+      params: queryParams,
+    });
     return this.validateListResponse<unknown>(
       response,
       'experiment_custom_sections',
