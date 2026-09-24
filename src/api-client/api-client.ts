@@ -1402,13 +1402,21 @@ export class APIClient {
     await this.request('DELETE', `/roles/${id}`);
   }
 
-  async listPermissions(): Promise<Permission[]> {
-    const response = await this.request('GET', '/permissions');
+  async listPermissions(options: { items?: number; page?: number } = {}): Promise<Permission[]> {
+    const params: Record<string, string> = {};
+    if (options.items !== undefined) params.items = String(options.items);
+    if (options.page !== undefined) params.page = String(options.page);
+    const response = await this.request('GET', '/permissions', { params });
     return this.validateListResponse<Permission>(response, 'permissions', 'listPermissions');
   }
 
-  async listPermissionCategories(): Promise<PermissionCategory[]> {
-    const response = await this.request('GET', '/permission_categories');
+  async listPermissionCategories(
+    options: { items?: number; page?: number } = {}
+  ): Promise<PermissionCategory[]> {
+    const params: Record<string, string> = {};
+    if (options.items !== undefined) params.items = String(options.items);
+    if (options.page !== undefined) params.page = String(options.page);
+    const response = await this.request('GET', '/permission_categories', { params });
     return this.validateListResponse<PermissionCategory>(
       response,
       'permission_categories',
@@ -1959,8 +1967,13 @@ export class APIClient {
     return this.validateListResponse<unknown>(response, 'webhook_events', 'listWebhookEvents');
   }
 
-  async listAccessControlPolicies(): Promise<unknown[]> {
-    const response = await this.request('GET', '/access_control_policies');
+  async listAccessControlPolicies(
+    options: { items?: number; page?: number } = {}
+  ): Promise<unknown[]> {
+    const params: Record<string, string> = {};
+    if (options.items !== undefined) params.items = String(options.items);
+    if (options.page !== undefined) params.page = String(options.page);
+    const response = await this.request('GET', '/access_control_policies', { params });
     return this.validateListResponse<unknown>(
       response,
       'access_control_policies',
