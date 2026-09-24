@@ -2037,8 +2037,11 @@ export class APIClient {
     this.validateOkResponse(response, 'deleteCorsOrigin');
   }
 
-  async listDatasources(): Promise<unknown[]> {
-    const response = await this.request('GET', '/datasources');
+  async listDatasources(options: { items?: number; page?: number } = {}): Promise<unknown[]> {
+    const params: Record<string, string> = {};
+    if (options.items !== undefined) params.items = String(options.items);
+    if (options.page !== undefined) params.page = String(options.page);
+    const response = await this.request('GET', '/datasources', { params });
     return this.validateListResponse<unknown>(
       response,
       'event_datasource_configs',
