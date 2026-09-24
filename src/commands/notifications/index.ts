@@ -22,12 +22,21 @@ export const notificationsCommand = new Command('notifications')
 const listCommand = new Command('list')
   .description('List notifications')
   .option('--cursor <n>', 'pagination cursor', parseInt)
+  .option('--limit <n>', 'max number of notifications to show', parseInt)
   .action(
     withErrorHandling(async (options) => {
       const globalOptions = getGlobalOptions(listCommand);
       const client = await getAPIClientFromOptions(globalOptions);
-      const result = await coreListNotifications(client, { cursor: options.cursor });
+      const result = await coreListNotifications(client, {
+        cursor: options.cursor,
+        limit: options.limit,
+      });
       printFormatted(result.data, globalOptions);
+      if (result.warnings) {
+        for (const w of result.warnings) {
+          console.log(chalk.gray(w));
+        }
+      }
     })
   );
 
