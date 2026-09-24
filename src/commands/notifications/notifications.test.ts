@@ -61,6 +61,23 @@ describe('notifications command', () => {
     expect(mockClient.getNotifications).toHaveBeenCalledWith(100);
   });
 
+  it('should not print truncation warnings when output is json', async () => {
+    vi.mocked(getGlobalOptions).mockReturnValue({ output: 'json' } as any);
+    const all = Array.from({ length: 50 }, (_, i) => ({ id: i }));
+    mockClient.getNotifications.mockResolvedValue(all);
+    await notificationsCommand.parseAsync(['node', 'test', 'list', '--limit', '20']);
+    const output = consoleSpy.mock.calls.flat().join(' ');
+    expect(output).not.toContain('Showing 20 of 50 notifications');
+  });
+
+  it('should print truncation warnings for table output', async () => {
+    const all = Array.from({ length: 50 }, (_, i) => ({ id: i }));
+    mockClient.getNotifications.mockResolvedValue(all);
+    await notificationsCommand.parseAsync(['node', 'test', 'list', '--limit', '20']);
+    const output = consoleSpy.mock.calls.flat().join(' ');
+    expect(output).toContain('Showing 20 of 50 notifications');
+  });
+
   it('should mark notifications as seen', async () => {
     mockClient.markNotificationsSeen.mockResolvedValue(undefined);
     await notificationsCommand.parseAsync(['node', 'test', 'mark-seen']);
