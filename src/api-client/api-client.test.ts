@@ -1193,6 +1193,30 @@ describe.skipIf(isLiveMode)('APIClient core', () => {
       expect(await client.listCustomSections()).toEqual([]);
     });
 
+    it('should list custom sections with the legacy positional type string', async () => {
+      server.use(
+        http.get(`${BASE_URL}/experiment_custom_sections`, ({ request }) => {
+          const url = new URL(request.url);
+          expect(url.searchParams.get('type')).toBe('active');
+          return HttpResponse.json({ experiment_custom_sections: [{ id: 1, type: 'active' }] });
+        })
+      );
+      expect(await client.listCustomSections('active')).toEqual([{ id: 1, type: 'active' }]);
+    });
+
+    it('should list custom sections with the options-object form', async () => {
+      server.use(
+        http.get(`${BASE_URL}/experiment_custom_sections`, ({ request }) => {
+          const url = new URL(request.url);
+          expect(url.searchParams.get('type')).toBe('active');
+          expect(url.searchParams.get('items')).toBe('5');
+          expect(url.searchParams.get('page')).toBe('2');
+          return HttpResponse.json({ experiment_custom_sections: [] });
+        })
+      );
+      await client.listCustomSections({ type: 'active', items: 5, page: 2 });
+    });
+
     it('should reorder custom sections', async () => {
       server.use(
         http.put(`${BASE_URL}/experiment_custom_sections/order`, () =>

@@ -1026,12 +1026,16 @@ export class APIClient {
   }
 
   async listCustomSections(
-    params: {
-      type?: string | undefined;
-      items?: number | undefined;
-      page?: number | undefined;
-    } = {}
+    typeOrParams?:
+      | string
+      | {
+          type?: string | undefined;
+          items?: number | undefined;
+          page?: number | undefined;
+        }
   ): Promise<unknown[]> {
+    const params =
+      typeof typeOrParams === 'string' ? { type: typeOrParams } : (typeOrParams ?? {});
     const queryParams: Record<string, string> = {};
     if (params.type) queryParams.type = params.type;
     if (params.items !== undefined) queryParams.items = String(params.items);
