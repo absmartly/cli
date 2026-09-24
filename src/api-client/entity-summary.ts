@@ -268,6 +268,25 @@ export function summarizeNamedEntityRow(e: Record<string, unknown>): Record<stri
   };
 }
 
+export function summarizeWebhook(w: Record<string, unknown>): Record<string, unknown> {
+  const events = w.events as Array<string> | undefined;
+  return {
+    id: w.id,
+    name: w.name ?? '',
+    url: w.url ?? '',
+    description: w.description ?? '',
+    enabled: w.enabled ?? false,
+    ordered: w.ordered ?? false,
+    max_retries: w.max_retries ?? 0,
+    events: events?.join(', ') ?? '',
+    archived: w.archived ?? false,
+    created_at: formatDate(w.created_at),
+    created_by: formatOwner(w.created_by as Record<string, unknown> | undefined),
+    updated_at: formatDate(w.updated_at),
+    updated_by: formatOwner(w.updated_by as Record<string, unknown> | undefined),
+  };
+}
+
 export function summarizeWebhookRow(w: Record<string, unknown>): Record<string, unknown> {
   return {
     id: w.id,

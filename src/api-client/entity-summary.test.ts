@@ -15,6 +15,7 @@ import {
   summarizeMetricCategoryRow,
   summarizeNamedEntityRow,
   summarizeWebhookRow,
+  summarizeWebhook,
 } from './entity-summary.js';
 
 describe('applyShowExclude', () => {
@@ -367,6 +368,33 @@ describe('summarizeNamedEntityRow', () => {
 
   it('keeps description empty if missing', () => {
     expect(summarizeNamedEntityRow({ id: 1, name: 'x' }).description).toBe('');
+  });
+});
+
+describe('summarizeWebhook', () => {
+  it('should include detail fields', () => {
+    const result = summarizeWebhook({
+      id: 3,
+      name: 'Slack notify',
+      url: 'https://hooks.example.com/abc',
+      enabled: true,
+      ordered: false,
+      max_retries: 2,
+      archived: false,
+      description: 'notifies slack',
+      events: ['experiment.created'],
+      created_at: '2024-01-01T00:00:00Z',
+      updated_at: '2024-06-01T00:00:00Z',
+      secret: 'super-secret-should-be-dropped',
+    });
+    expect(result).toMatchObject({
+      id: 3,
+      name: 'Slack notify',
+      url: 'https://hooks.example.com/abc',
+      enabled: true,
+      description: 'notifies slack',
+    });
+    expect(result).not.toHaveProperty('secret');
   });
 });
 
