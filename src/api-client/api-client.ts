@@ -1774,9 +1774,7 @@ export class APIClient {
     await this.request('DELETE', `/goals/${id}/asset_role_teams/${teamId}/${assetRoleId}`);
   }
 
-  async listAssetRoles(
-    options: { items?: number; page?: number } = {}
-  ): Promise<AssetRole[]> {
+  async listAssetRoles(options: { items?: number; page?: number } = {}): Promise<AssetRole[]> {
     const params: Record<string, string> = {};
     if (options.items !== undefined) params.items = String(options.items);
     if (options.page !== undefined) params.page = String(options.page);
