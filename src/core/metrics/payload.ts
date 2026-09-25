@@ -27,6 +27,7 @@ export interface MetricFields {
   activityInterval?: string | undefined;
   customSql?: string | undefined;
   customStatisticsType?: string | undefined;
+  datasourceId?: number | undefined;
   vrLookbackInterval?: string | undefined;
   relationKind?: string | undefined;
   relationRefundOperation?: string | undefined;
@@ -81,6 +82,7 @@ export function buildMetricPayload(fields: MetricFields): Record<string, unknown
   set('activity_interval', fields.activityInterval);
   set('custom_sql', fields.customSql);
   set('custom_statistics_type', fields.customStatisticsType);
+  set('datasource_id', fields.datasourceId);
   set('vr_lookback_interval', fields.vrLookbackInterval);
   set('relation_kind', fields.relationKind);
   set('relation_refund_operation', fields.relationRefundOperation);
