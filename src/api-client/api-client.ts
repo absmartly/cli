@@ -1621,7 +1621,7 @@ export class APIClient {
   async hasNewNotifications(lastNotificationId?: number): Promise<boolean> {
     const params: Record<string, string | number> = {};
     if (lastNotificationId !== undefined) params.last_notification_id = lastNotificationId;
-    const response = await this.request<boolean>('GET', '/notifications/check_for_new', {
+    const response = await this.request<boolean>('GET', '/notifications/has-new', {
       params,
     });
     if (typeof response.data !== 'boolean') {
@@ -1959,7 +1959,7 @@ export class APIClient {
     team_ids?: number[];
     owner_ids?: number[];
   }): Promise<unknown> {
-    const response = await this.request('GET', '/insights/velocity/widgets', {
+    const response = await this.request('GET', '/insights/velocity/summary', {
       params: this.buildInsightParams(params),
     });
     return response.data;
@@ -1981,7 +1981,7 @@ export class APIClient {
 
   async listWebhookEvents(): Promise<unknown[]> {
     const response = await this.request('GET', '/webhook_events');
-    return this.validateListResponse<unknown>(response, 'items', 'listWebhookEvents');
+    return this.validateListResponse<unknown>(response, 'webhook_events', 'listWebhookEvents');
   }
 
   async listAccessControlPolicies(
@@ -1993,7 +1993,7 @@ export class APIClient {
     const response = await this.request('GET', '/access_control_policies', { params });
     return this.validateListResponse<unknown>(
       response,
-      'access_control_policies',
+      'access_control_policy',
       'listAccessControlPolicies'
     );
   }
@@ -2419,7 +2419,7 @@ export class APIClient {
     teams?: string;
     applications?: string;
   }): Promise<unknown> {
-    const response = await this.request('GET', '/insights/velocity/history', {
+    const response = await this.request('GET', '/insights/velocity/summary/detail', {
       params: this.buildInsightParams(params),
     });
     return response.data;

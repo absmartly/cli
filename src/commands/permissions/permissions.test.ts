@@ -104,4 +104,21 @@ describe('permissions command', () => {
 
     expect(mockClient.listAccessControlPolicies).toHaveBeenCalledWith({ items: 10, page: 2 });
   });
+
+  it('should warn when the server returns more results than the page size', async () => {
+    const all = Array.from({ length: 30 }, (_, i) => ({ id: i }));
+    mockClient.listPermissions.mockResolvedValue(all);
+    await permissionsCommand.parseAsync(['node', 'test', 'list', '--items', '20', '--page', '1']);
+    const output = consoleSpy.mock.calls.flat().join(' ');
+    expect(output).toContain('Showing 20 of 30 results');
+  });
+
+  it('should not print the results warning when output is json', async () => {
+    vi.mocked(getGlobalOptions).mockReturnValue({ output: 'json' } as any);
+    const all = Array.from({ length: 30 }, (_, i) => ({ id: i }));
+    mockClient.listPermissions.mockResolvedValue(all);
+    await permissionsCommand.parseAsync(['node', 'test', 'list', '--items', '20', '--page', '1']);
+    const output = consoleSpy.mock.calls.flat().join(' ');
+    expect(output).not.toContain('Showing 20 of 30 results');
+  });
 });

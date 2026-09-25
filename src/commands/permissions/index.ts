@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import chalk from 'chalk';
 import {
   getAPIClientFromOptions,
   getGlobalOptions,
@@ -12,6 +13,14 @@ import {
   listAccessControlPolicies,
 } from '../../core/permissions/list.js';
 
+function printWarnings(warnings: string[] | undefined, output: string): void {
+  if (warnings && output !== 'json' && output !== 'yaml') {
+    for (const w of warnings) {
+      console.log(chalk.gray(w));
+    }
+  }
+}
+
 export const permissionsCommand = new Command('permissions')
   .aliases(['permission', 'perms', 'perm'])
   .description('Permission commands');
@@ -24,6 +33,7 @@ const listCommand = addPaginationOptions(
     const client = await getAPIClientFromOptions(globalOptions);
     const result = await listPermissions(client, { items: options.items, page: options.page });
     printFormatted(result.data, globalOptions);
+    printWarnings(result.warnings, globalOptions.output as string);
     printPaginationFooter(
       (result.data as unknown[]).length,
       options.items,
@@ -44,6 +54,7 @@ const categoriesCommand = addPaginationOptions(
       page: options.page,
     });
     printFormatted(result.data, globalOptions);
+    printWarnings(result.warnings, globalOptions.output as string);
     printPaginationFooter(
       (result.data as unknown[]).length,
       options.items,
@@ -64,6 +75,7 @@ const policiesCommand = addPaginationOptions(
       page: options.page,
     });
     printFormatted(result.data, globalOptions);
+    printWarnings(result.warnings, globalOptions.output as string);
     printPaginationFooter(
       (result.data as unknown[]).length,
       options.items,
