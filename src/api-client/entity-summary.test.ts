@@ -372,7 +372,7 @@ describe('summarizeNamedEntityRow', () => {
 });
 
 describe('summarizeWebhook', () => {
-  it('should include detail fields', () => {
+  it('should include detail fields and join event subscription names', () => {
     const result = summarizeWebhook({
       id: 3,
       name: 'Slack notify',
@@ -382,7 +382,20 @@ describe('summarizeWebhook', () => {
       max_retries: 2,
       archived: false,
       description: 'notifies slack',
-      events: ['experiment.created'],
+      events: [
+        {
+          webhook_id: 3,
+          webhook_event_id: 1,
+          enabled: true,
+          event: { id: 1, name: 'ExperimentCreated', description: 'Experiment created' },
+        },
+        {
+          webhook_id: 3,
+          webhook_event_id: 2,
+          enabled: true,
+          event: { id: 2, name: 'ExperimentDevelopment', description: 'Experiment started' },
+        },
+      ],
       created_at: '2024-01-01T00:00:00Z',
       updated_at: '2024-06-01T00:00:00Z',
       secret: 'super-secret-should-be-dropped',
@@ -393,8 +406,26 @@ describe('summarizeWebhook', () => {
       url: 'https://hooks.example.com/abc',
       enabled: true,
       description: 'notifies slack',
+      events: 'ExperimentCreated, ExperimentDevelopment',
     });
     expect(result).not.toHaveProperty('secret');
+  });
+
+  it('should not throw on missing/empty events and should fall back to empty string', () => {
+    const result = summarizeWebhook({ id: 4, name: 'No events' });
+    expect(result.events).toBe('');
+
+    const emptyResult = summarizeWebhook({ id: 5, name: 'Empty events', events: [] });
+    expect(emptyResult.events).toBe('');
+  });
+
+  it('should still join plain string events for backward compatibility', () => {
+    const result = summarizeWebhook({
+      id: 6,
+      name: 'Legacy shape',
+      events: ['experiment.created'],
+    });
+    expect(result.events).toBe('experiment.created');
   });
 });
 

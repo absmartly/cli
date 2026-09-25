@@ -268,8 +268,24 @@ export function summarizeNamedEntityRow(e: Record<string, unknown>): Record<stri
   };
 }
 
+// A webhook's `events` field is an array of subscription objects
+// (`{ webhook_id, webhook_event_id, enabled, event: { id, name, description } }`),
+// not plain strings — extract each entry's event name for the terse summary.
+function summarizeWebhookEvents(events: unknown): string {
+  if (!Array.isArray(events)) return '';
+  return events
+    .map((e) => {
+      if (typeof e === 'string') return e;
+      const name = (e as Record<string, unknown> | null)?.event as
+        | Record<string, unknown>
+        | undefined;
+      return typeof name?.name === 'string' ? name.name : undefined;
+    })
+    .filter((name): name is string => typeof name === 'string')
+    .join(', ');
+}
+
 export function summarizeWebhook(w: Record<string, unknown>): Record<string, unknown> {
-  const events = w.events as Array<string> | undefined;
   return {
     id: w.id,
     name: w.name ?? '',
@@ -278,7 +294,7 @@ export function summarizeWebhook(w: Record<string, unknown>): Record<string, unk
     enabled: w.enabled ?? false,
     ordered: w.ordered ?? false,
     max_retries: w.max_retries ?? 0,
-    events: events?.join(', ') ?? '',
+    events: summarizeWebhookEvents(w.events),
     archived: w.archived ?? false,
     created_at: formatDate(w.created_at),
     created_by: formatOwner(w.created_by as Record<string, unknown> | undefined),
