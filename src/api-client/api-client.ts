@@ -1621,14 +1621,15 @@ export class APIClient {
   async hasNewNotifications(lastNotificationId?: number): Promise<boolean> {
     const params: Record<string, string | number> = {};
     if (lastNotificationId !== undefined) params.last_notification_id = lastNotificationId;
-    const response = await this.request<Record<string, unknown>>('GET', '/notifications/has-new', {
+    const response = await this.request<boolean>('GET', '/notifications/check_for_new', {
       params,
     });
-    const data = response.data;
-    if (!data || typeof data !== 'object') {
-      throw new Error('Invalid API response for hasNewNotifications: Expected object');
+    if (typeof response.data !== 'boolean') {
+      throw new Error(
+        `Invalid API response for hasNewNotifications: Expected boolean, got ${typeof response.data}`
+      );
     }
-    return Boolean((data as Record<string, unknown>).has_new);
+    return response.data;
   }
 
   async listExperimentAccessUsers(id: ExperimentId): Promise<unknown[]> {
@@ -1958,7 +1959,7 @@ export class APIClient {
     team_ids?: number[];
     owner_ids?: number[];
   }): Promise<unknown> {
-    const response = await this.request('GET', '/insights/velocity/summary', {
+    const response = await this.request('GET', '/insights/velocity/widgets', {
       params: this.buildInsightParams(params),
     });
     return response.data;
@@ -1980,7 +1981,7 @@ export class APIClient {
 
   async listWebhookEvents(): Promise<unknown[]> {
     const response = await this.request('GET', '/webhook_events');
-    return this.validateListResponse<unknown>(response, 'webhook_events', 'listWebhookEvents');
+    return this.validateListResponse<unknown>(response, 'items', 'listWebhookEvents');
   }
 
   async listAccessControlPolicies(
@@ -2418,7 +2419,7 @@ export class APIClient {
     teams?: string;
     applications?: string;
   }): Promise<unknown> {
-    const response = await this.request('GET', '/insights/velocity/summary/detail', {
+    const response = await this.request('GET', '/insights/velocity/history', {
       params: this.buildInsightParams(params),
     });
     return response.data;

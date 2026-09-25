@@ -921,7 +921,7 @@ describe.skipIf(isLiveMode)('APIClient core', () => {
     it('should list webhook events', async () => {
       server.use(
         http.get(`${BASE_URL}/webhook_events`, () =>
-          HttpResponse.json({ webhook_events: ['experiment.started'] })
+          HttpResponse.json({ items: ['experiment.started'], metadata: { count: 1 } })
         )
       );
       expect(await client.listWebhookEvents()).toContain('experiment.started');
@@ -1017,7 +1017,7 @@ describe.skipIf(isLiveMode)('APIClient core', () => {
 
     it('should check for new notifications', async () => {
       server.use(
-        http.get(`${BASE_URL}/notifications/has-new`, () => HttpResponse.json({ has_new: true }))
+        http.get(`${BASE_URL}/notifications/check_for_new`, () => HttpResponse.json(true))
       );
       expect(await client.hasNewNotifications()).toBe(true);
     });
@@ -1230,7 +1230,7 @@ describe.skipIf(isLiveMode)('APIClient core', () => {
   describe('insights', () => {
     it('should get velocity insights', async () => {
       server.use(
-        http.get(`${BASE_URL}/insights/velocity/summary`, () => HttpResponse.json({ data: [] }))
+        http.get(`${BASE_URL}/insights/velocity/widgets`, () => HttpResponse.json({ data: [] }))
       );
       const result = await client.getVelocityInsights({
         from: 1000,
