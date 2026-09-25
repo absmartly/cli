@@ -180,6 +180,11 @@ function addMetricFieldOptions(cmd: Command): Command {
       )
       .option('--custom-sql <sql>', 'custom SQL (required for custom_sql type)')
       .option('--custom-statistics-type <type>', 'custom statistics type (continuous, binomial)')
+      .option(
+        '--datasource-id <id>',
+        'datasource ID the custom SQL runs against (custom_sql)',
+        parseInt
+      )
       .option('--vr-lookback-interval <interval>', 'VR lookback interval (1w, 2w, 3w, 4w)')
       .option('--relation-kind <kind>', 'goal relation kind (refund, replacement)')
       .option('--relation-refund-operation <op>', 'refund operation (add, subtract)')
@@ -271,6 +276,7 @@ async function resolveMetricFieldsFromOptions(
     activityInterval: options.activityInterval as string | undefined,
     customSql: options.customSql as string | undefined,
     customStatisticsType: options.customStatisticsType as string | undefined,
+    datasourceId: options.datasourceId as number | undefined,
     vrLookbackInterval: options.vrLookbackInterval as string | undefined,
     relationKind: options.relationKind as string | undefined,
     relationRefundOperation: options.relationRefundOperation as string | undefined,
