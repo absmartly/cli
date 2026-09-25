@@ -388,6 +388,34 @@ describe('metrics command', () => {
     );
   });
 
+  it('should create a custom_sql metric pinned to a datasource via --datasource-id', async () => {
+    await metricsCommand.parseAsync([
+      'node',
+      'test',
+      'create',
+      '--name',
+      'BQ conversions',
+      '--type',
+      'custom_sql',
+      '--description',
+      'BigQuery conversions',
+      '--custom-sql',
+      'SELECT 1',
+      '--custom-statistics-type',
+      'binomial',
+      '--datasource-id',
+      '10',
+    ]);
+
+    expect(mockClient.createMetric).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'custom_sql',
+        custom_sql: 'SELECT 1',
+        datasource_id: 10,
+      })
+    );
+  });
+
   it('should create a goal_ratio metric with numerator and denominator types', async () => {
     await metricsCommand.parseAsync([
       'node',
@@ -805,6 +833,41 @@ describe('metrics command', () => {
       'Switch to tukey outlier'
     );
     expect(mockClient.activateMetric).not.toHaveBeenCalled();
+  });
+
+  it('should pass --datasource-id through to the version payload', async () => {
+    await metricsCommand.parseAsync([
+      'node',
+      'test',
+      'version',
+      '1',
+      '--reason',
+      'pin to bigquery',
+      '--datasource-id',
+      '10',
+    ]);
+
+    expect(mockClient.createMetricVersion).toHaveBeenCalledWith(
+      1,
+      { datasource_id: 10 },
+      'pin to bigquery'
+    );
+  });
+
+  it('should omit datasource_id from the version payload when --datasource-id is not passed', async () => {
+    await metricsCommand.parseAsync([
+      'node',
+      'test',
+      'version',
+      '1',
+      '--reason',
+      'rename',
+      '--name',
+      'x',
+    ]);
+
+    const payload = mockClient.createMetricVersion.mock.calls[0]![1] as Record<string, unknown>;
+    expect(payload).not.toHaveProperty('datasource_id');
   });
 
   it('should support `new-version` alias', async () => {
