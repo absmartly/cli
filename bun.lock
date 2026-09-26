@@ -28,7 +28,7 @@
         "@typescript-eslint/parser": "^8.21.0",
         "@vitest/coverage-v8": "^4.1.4",
         "@vitest/ui": "^4.0.18",
-        "absmartly-api-mocks": "npm:@absmartly/api-mocks@^1.0.6",
+        "absmartly-api-mocks": "^1.0.9",
         "dotenv": "^16.4.7",
         "eslint": "^9.19.0",
         "jsdom": "^28.0.0",
@@ -307,7 +307,7 @@
 
     "@vitest/utils": ["@vitest/utils@4.1.4", "", { "dependencies": { "@vitest/pretty-format": "4.1.4", "convert-source-map": "^2.0.0", "tinyrainbow": "^3.1.0" } }, "sha512-13QMT+eysM5uVGa1rG4kegGYNp6cnQcsTc67ELFbhNLQO+vgsygtYJx2khvdt4gVQqSSpC/KT5FZZxUpP3Oatw=="],
 
-    "absmartly-api-mocks": ["@absmartly/api-mocks@1.0.6", "", { "dependencies": { "@apidevtools/json-schema-ref-parser": "^15.2.2", "@faker-js/faker": "^10.2.0", "ajv": "^8.17.1", "ajv-formats": "^3.0.1", "js-yaml": "^4.1.1" }, "peerDependencies": { "msw": "^2.0.0" } }, "sha512-dhLFeIjrZ2D+JGIo9JPKTnKzLLwIkNze1s24ZPs/8H3KqvEC52TuDuWC04PY15q9kjE5G9P3GeyWF/XeqFF9ug=="],
+    "absmartly-api-mocks": ["@absmartly/api-mocks@1.0.9", "", { "dependencies": { "@apidevtools/json-schema-ref-parser": "^15.2.2", "@faker-js/faker": "^10.2.0", "ajv": "^8.17.1", "ajv-formats": "^3.0.1", "js-yaml": "^4.1.1" }, "peerDependencies": { "msw": "^2.0.0" } }, "sha512-y9U9eqDuQinssHLPGliw5WhhPeQ2OShr0Geh0eFGVUof8+D0kz6ibpXANkCaCEEogOIkQvXivRofFhdpioHziQ=="],
 
     "acorn": ["acorn@8.16.0", "", { "bin": { "acorn": "bin/acorn" } }, "sha512-UVJyE9MttOsBQIDKw1skb9nAwQuR5wuGD3+82K6JgJlm/Y+KI92oNsMNGZCYdDsVtRHSak0pcV5Dno5+4jh9sw=="],
 
