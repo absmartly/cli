@@ -1227,9 +1227,7 @@ describe.skipIf(isLiveMode)('APIClient core', () => {
 
   describe('insights', () => {
     it('should get velocity insights', async () => {
-      server.use(
-        http.get(`${BASE_URL}/insights/velocity/summary`, () => HttpResponse.json({ data: [] }))
-      );
+      server.use(http.get(`${BASE_URL}/insights/summary`, () => HttpResponse.json({ data: [] })));
       const result = await client.getVelocityInsights({
         from: 1000,
         to: 2000,

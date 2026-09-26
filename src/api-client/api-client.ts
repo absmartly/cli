@@ -1959,7 +1959,7 @@ export class APIClient {
     team_ids?: number[];
     owner_ids?: number[];
   }): Promise<unknown> {
-    const response = await this.request('GET', '/insights/velocity/summary', {
+    const response = await this.request('GET', '/insights/summary', {
       params: this.buildInsightParams(params),
     });
     return response.data;
@@ -2419,7 +2419,7 @@ export class APIClient {
     teams?: string;
     applications?: string;
   }): Promise<unknown> {
-    const response = await this.request('GET', '/insights/velocity/summary/detail', {
+    const response = await this.request('GET', '/insights/summary/detail', {
       params: this.buildInsightParams(params),
     });
     return response.data;
