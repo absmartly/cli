@@ -56,6 +56,13 @@ describe('listPermissions pagination', () => {
     expect(result.pagination?.hasMore).toBe(false);
   });
 
+  it('should not warn to see more on the final page even though the full list exceeds items', async () => {
+    const all = Array.from({ length: 30 }, (_, i) => ({ id: i }));
+    mockClient.listPermissions.mockResolvedValue(all);
+    const result = await listPermissions(mockClient as any, { items: 20, page: 2 });
+    expect(result.warnings).toBeUndefined();
+  });
+
   it('should not warn when everything fits on one page', async () => {
     mockClient.listPermissions.mockResolvedValue([{ id: 1 }]);
     const result = await listPermissions(mockClient as any, { items: 20, page: 1 });

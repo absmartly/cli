@@ -24,7 +24,7 @@ function paginateClientSide(
   const start = (page - 1) * items;
   const pageData = data.slice(start, start + items);
   const warnings =
-    data.length > items
+    page * items < data.length
       ? [`Showing ${pageData.length} of ${data.length} results. Use --page to see more.`]
       : undefined;
   return { pageData, warnings };

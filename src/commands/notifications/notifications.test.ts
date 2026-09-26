@@ -78,6 +78,25 @@ describe('notifications command', () => {
     expect(output).toContain('Showing 20 of 50 notifications');
   });
 
+  it('should reject a negative --limit instead of returning an inverted slice', async () => {
+    mockClient.getNotifications.mockResolvedValue([{ id: 1 }]);
+    await expect(
+      notificationsCommand.parseAsync(['node', 'test', 'list', '--limit', '-1'])
+    ).rejects.toThrow('process.exit: 1');
+    const errorOutput = consoleErrorSpy.mock.calls.flat().join(' ');
+    expect(errorOutput).toContain('Invalid value for --limit');
+    expect(mockClient.getNotifications).not.toHaveBeenCalled();
+  });
+
+  it('should reject a non-numeric --limit instead of silently returning nothing', async () => {
+    mockClient.getNotifications.mockResolvedValue([{ id: 1 }]);
+    await expect(
+      notificationsCommand.parseAsync(['node', 'test', 'list', '--limit', 'abc'])
+    ).rejects.toThrow('process.exit: 1');
+    const errorOutput = consoleErrorSpy.mock.calls.flat().join(' ');
+    expect(errorOutput).toContain('Invalid value for --limit');
+  });
+
   it('should mark notifications as seen', async () => {
     mockClient.markNotificationsSeen.mockResolvedValue(undefined);
     await notificationsCommand.parseAsync(['node', 'test', 'mark-seen']);

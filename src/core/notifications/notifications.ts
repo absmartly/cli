@@ -13,7 +13,10 @@ export async function listNotifications(
   params: ListNotificationsParams
 ): Promise<CommandResult<unknown>> {
   const all = await client.getNotifications(params.cursor);
-  const limit = params.limit ?? DEFAULT_NOTIFICATIONS_LIMIT;
+  const limit =
+    params.limit !== undefined && Number.isInteger(params.limit) && params.limit > 0
+      ? params.limit
+      : DEFAULT_NOTIFICATIONS_LIMIT;
   const data = all.slice(0, limit);
   return {
     data,
