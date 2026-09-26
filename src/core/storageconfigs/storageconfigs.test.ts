@@ -16,11 +16,17 @@ describe('storageconfigs', () => {
     testStorageConfig: vi.fn(),
   };
 
-  it('should list storage configs', async () => {
+  it('should default items/page and forward to client', async () => {
     mockClient.listStorageConfigs.mockResolvedValue([{ id: 1 }]);
-    const result = await listStorageConfigs(mockClient as any);
-    expect(mockClient.listStorageConfigs).toHaveBeenCalled();
+    const result = await listStorageConfigs(mockClient as any, {});
+    expect(mockClient.listStorageConfigs).toHaveBeenCalledWith({ items: 20, page: 1 });
     expect(result.data).toEqual([{ id: 1 }]);
+  });
+
+  it('should forward explicit items/page', async () => {
+    mockClient.listStorageConfigs.mockResolvedValue([]);
+    await listStorageConfigs(mockClient as any, { items: 5, page: 3 });
+    expect(mockClient.listStorageConfigs).toHaveBeenCalledWith({ items: 5, page: 3 });
   });
 
   it('should get storage config by id', async () => {

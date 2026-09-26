@@ -1025,10 +1025,23 @@ export class APIClient {
     });
   }
 
-  async listCustomSections(type?: string): Promise<unknown[]> {
-    const params: Record<string, string> = {};
-    if (type) params.type = type;
-    const response = await this.request('GET', '/experiment_custom_sections', { params });
+  async listCustomSections(
+    typeOrParams?:
+      | string
+      | {
+          type?: string | undefined;
+          items?: number | undefined;
+          page?: number | undefined;
+        }
+  ): Promise<unknown[]> {
+    const params = typeof typeOrParams === 'string' ? { type: typeOrParams } : (typeOrParams ?? {});
+    const queryParams: Record<string, string> = {};
+    if (params.type) queryParams.type = params.type;
+    if (params.items !== undefined) queryParams.items = String(params.items);
+    if (params.page !== undefined) queryParams.page = String(params.page);
+    const response = await this.request('GET', '/experiment_custom_sections', {
+      params: queryParams,
+    });
     return this.validateListResponse<unknown>(
       response,
       'experiment_custom_sections',
@@ -1402,13 +1415,21 @@ export class APIClient {
     await this.request('DELETE', `/roles/${id}`);
   }
 
-  async listPermissions(): Promise<Permission[]> {
-    const response = await this.request('GET', '/permissions');
+  async listPermissions(options: { items?: number; page?: number } = {}): Promise<Permission[]> {
+    const params: Record<string, string> = {};
+    if (options.items !== undefined) params.items = String(options.items);
+    if (options.page !== undefined) params.page = String(options.page);
+    const response = await this.request('GET', '/permissions', { params });
     return this.validateListResponse<Permission>(response, 'permissions', 'listPermissions');
   }
 
-  async listPermissionCategories(): Promise<PermissionCategory[]> {
-    const response = await this.request('GET', '/permission_categories');
+  async listPermissionCategories(
+    options: { items?: number; page?: number } = {}
+  ): Promise<PermissionCategory[]> {
+    const params: Record<string, string> = {};
+    if (options.items !== undefined) params.items = String(options.items);
+    if (options.page !== undefined) params.page = String(options.page);
+    const response = await this.request('GET', '/permission_categories', { params });
     return this.validateListResponse<PermissionCategory>(
       response,
       'permission_categories',
@@ -1600,14 +1621,15 @@ export class APIClient {
   async hasNewNotifications(lastNotificationId?: number): Promise<boolean> {
     const params: Record<string, string | number> = {};
     if (lastNotificationId !== undefined) params.last_notification_id = lastNotificationId;
-    const response = await this.request<Record<string, unknown>>('GET', '/notifications/has-new', {
+    const response = await this.request<boolean>('GET', '/notifications/has-new', {
       params,
     });
-    const data = response.data;
-    if (!data || typeof data !== 'object') {
-      throw new Error('Invalid API response for hasNewNotifications: Expected object');
+    if (typeof response.data !== 'boolean') {
+      throw new Error(
+        `Invalid API response for hasNewNotifications: Expected boolean, got ${typeof response.data}`
+      );
     }
-    return Boolean((data as Record<string, unknown>).has_new);
+    return response.data;
   }
 
   async listExperimentAccessUsers(id: ExperimentId): Promise<unknown[]> {
@@ -1756,8 +1778,11 @@ export class APIClient {
     await this.request('DELETE', `/goals/${id}/asset_role_teams/${teamId}/${assetRoleId}`);
   }
 
-  async listAssetRoles(): Promise<AssetRole[]> {
-    const response = await this.request('GET', '/asset_roles');
+  async listAssetRoles(options: { items?: number; page?: number } = {}): Promise<AssetRole[]> {
+    const params: Record<string, string> = {};
+    if (options.items !== undefined) params.items = String(options.items);
+    if (options.page !== undefined) params.page = String(options.page);
+    const response = await this.request('GET', '/asset_roles', { params });
     return this.validateListResponse<AssetRole>(response, 'asset_roles', 'listAssetRoles');
   }
 
@@ -1934,7 +1959,7 @@ export class APIClient {
     team_ids?: number[];
     owner_ids?: number[];
   }): Promise<unknown> {
-    const response = await this.request('GET', '/insights/velocity/summary', {
+    const response = await this.request('GET', '/insights/summary', {
       params: this.buildInsightParams(params),
     });
     return response.data;
@@ -1959,11 +1984,16 @@ export class APIClient {
     return this.validateListResponse<unknown>(response, 'webhook_events', 'listWebhookEvents');
   }
 
-  async listAccessControlPolicies(): Promise<unknown[]> {
-    const response = await this.request('GET', '/access_control_policies');
+  async listAccessControlPolicies(
+    options: { items?: number; page?: number } = {}
+  ): Promise<unknown[]> {
+    const params: Record<string, string> = {};
+    if (options.items !== undefined) params.items = String(options.items);
+    if (options.page !== undefined) params.page = String(options.page);
+    const response = await this.request('GET', '/access_control_policies', { params });
     return this.validateListResponse<unknown>(
       response,
-      'access_control_policies',
+      'access_control_policy',
       'listAccessControlPolicies'
     );
   }
@@ -1983,8 +2013,11 @@ export class APIClient {
     return this.validateEntityResponse<unknown>(response, 'config', 'updatePlatformConfig');
   }
 
-  async listCorsOrigins(): Promise<unknown[]> {
-    const response = await this.request('GET', '/cors');
+  async listCorsOrigins(options: { items?: number; page?: number } = {}): Promise<unknown[]> {
+    const params: Record<string, string> = {};
+    if (options.items !== undefined) params.items = String(options.items);
+    if (options.page !== undefined) params.page = String(options.page);
+    const response = await this.request('GET', '/cors', { params });
     return this.validateListResponse<unknown>(response, 'cors_allowed_origins', 'listCorsOrigins');
   }
 
@@ -2016,8 +2049,11 @@ export class APIClient {
     this.validateOkResponse(response, 'deleteCorsOrigin');
   }
 
-  async listDatasources(): Promise<unknown[]> {
-    const response = await this.request('GET', '/datasources');
+  async listDatasources(options: { items?: number; page?: number } = {}): Promise<unknown[]> {
+    const params: Record<string, string> = {};
+    if (options.items !== undefined) params.items = String(options.items);
+    if (options.page !== undefined) params.page = String(options.page);
+    const response = await this.request('GET', '/datasources', { params });
     return this.validateListResponse<unknown>(
       response,
       'event_datasource_configs',
@@ -2071,9 +2107,17 @@ export class APIClient {
     this.validateOkResponse(response, 'validateDatasourceQuery');
   }
 
-  async listExportConfigs(params?: { statuses?: string }): Promise<ExportConfigShape[]> {
+  async listExportConfigs(params?: {
+    statuses?: string | undefined;
+    items?: number | undefined;
+    page?: number | undefined;
+  }): Promise<ExportConfigShape[]> {
+    const queryParams: Record<string, string> = {};
+    if (params?.statuses !== undefined) queryParams.statuses = params.statuses;
+    if (params?.items !== undefined) queryParams.items = String(params.items);
+    if (params?.page !== undefined) queryParams.page = String(params.page);
     const response = await this.request('GET', '/export_configs', {
-      params: params as Record<string, string>,
+      params: queryParams,
     });
     return this.validateListResponse<ExportConfigShape>(
       response,
@@ -2119,8 +2163,11 @@ export class APIClient {
     );
   }
 
-  async listUpdateSchedules(): Promise<unknown[]> {
-    const response = await this.request('GET', '/experiment_update_schedules');
+  async listUpdateSchedules(options: { items?: number; page?: number } = {}): Promise<unknown[]> {
+    const params: Record<string, string> = {};
+    if (options.items !== undefined) params.items = String(options.items);
+    if (options.page !== undefined) params.page = String(options.page);
+    const response = await this.request('GET', '/experiment_update_schedules', { params });
     return this.validateListResponse<unknown>(
       response,
       'experiment_update_schedules',
@@ -2372,7 +2419,7 @@ export class APIClient {
     teams?: string;
     applications?: string;
   }): Promise<unknown> {
-    const response = await this.request('GET', '/insights/velocity/summary/detail', {
+    const response = await this.request('GET', '/insights/summary/detail', {
       params: this.buildInsightParams(params),
     });
     return response.data;
@@ -2418,8 +2465,11 @@ export class APIClient {
     return response.data as { matrix: number[][] };
   }
 
-  async listStorageConfigs(): Promise<unknown[]> {
-    const response = await this.request('GET', '/storage_configs');
+  async listStorageConfigs(options: { items?: number; page?: number } = {}): Promise<unknown[]> {
+    const params: Record<string, string> = {};
+    if (options.items !== undefined) params.items = String(options.items);
+    if (options.page !== undefined) params.page = String(options.page);
+    const response = await this.request('GET', '/storage_configs', { params });
     return this.validateListResponse<unknown>(response, 'storage_configs', 'listStorageConfigs');
   }
 
@@ -2531,8 +2581,13 @@ export class APIClient {
     return this.validateEntityResponse<User>(response, 'user', 'updateCurrentUser');
   }
 
-  async listExperimentActionDialogFields(): Promise<unknown[]> {
-    const response = await this.request('GET', '/experiment_action_dialog_fields');
+  async listExperimentActionDialogFields(
+    options: { items?: number; page?: number } = {}
+  ): Promise<unknown[]> {
+    const params: Record<string, string> = {};
+    if (options.items !== undefined) params.items = String(options.items);
+    if (options.page !== undefined) params.page = String(options.page);
+    const response = await this.request('GET', '/experiment_action_dialog_fields', { params });
     return this.validateListResponse<unknown>(
       response,
       'experiment_action_dialog_fields',

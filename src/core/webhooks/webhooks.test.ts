@@ -25,19 +25,39 @@ describe('listWebhooks', () => {
     const result = await listWebhooks(mockClient, { items: 10, page: 1 });
 
     expect(mockClient.listWebhooks).toHaveBeenCalledWith({ items: 10, page: 1 });
-    expect(result).toEqual({ data: hooks });
+    expect(result.data).toEqual(hooks);
+  });
+
+  it('should include summarized rows', async () => {
+    const hooks = [{ id: 1, name: 'H1', url: 'https://a.com', enabled: true, archived: false }];
+    mockClient.listWebhooks.mockResolvedValue(hooks);
+
+    const result = await listWebhooks(mockClient, { items: 10, page: 1 });
+
+    expect(result.rows).toBeDefined();
+    expect(result.rows![0]).toMatchObject({
+      id: 1,
+      name: 'H1',
+      url: 'https://a.com',
+      enabled: true,
+    });
   });
 });
 
 describe('getWebhook', () => {
-  it('should get webhook by id', async () => {
-    const hook = { id: 5, name: 'hook' };
+  const hook = { id: 5, name: 'hook', url: 'https://x.com', enabled: true, secret: 'shh' };
+
+  it('should return summarized data by default', async () => {
     mockClient.getWebhook.mockResolvedValue(hook);
-
     const result = await getWebhook(mockClient, { id: 5 as any });
+    expect(result.data).not.toHaveProperty('secret');
+    expect(result.data).toMatchObject({ id: 5, name: 'hook', url: 'https://x.com' });
+  });
 
-    expect(mockClient.getWebhook).toHaveBeenCalledWith(5);
-    expect(result).toEqual({ data: hook });
+  it('should return raw data when raw=true', async () => {
+    mockClient.getWebhook.mockResolvedValue(hook);
+    const result = await getWebhook(mockClient, { id: 5 as any, raw: true });
+    expect(result.data).toEqual(hook);
   });
 });
 

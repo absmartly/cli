@@ -52,8 +52,14 @@ describe('cors command', () => {
   it('should list CORS origins', async () => {
     await corsCommand.parseAsync(['node', 'test', 'list']);
 
-    expect(mockClient.listCorsOrigins).toHaveBeenCalled();
+    expect(mockClient.listCorsOrigins).toHaveBeenCalledWith({ items: 20, page: 1 });
     expect(printFormatted).toHaveBeenCalled();
+  });
+
+  it('should list CORS origins with pagination', async () => {
+    await corsCommand.parseAsync(['node', 'test', 'list', '--items', '10', '--page', '2']);
+
+    expect(mockClient.listCorsOrigins).toHaveBeenCalledWith({ items: 10, page: 2 });
   });
 
   it('should get CORS origin by id', async () => {

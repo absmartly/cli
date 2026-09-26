@@ -22,11 +22,25 @@ describe('exportconfigs', () => {
     cancelExportHistory: vi.fn(),
   };
 
-  it('should list export configs', async () => {
+  it('should default items/page and forward to client', async () => {
     mockClient.listExportConfigs.mockResolvedValue([{ id: 1 }]);
-    const result = await listExportConfigs(mockClient as any);
-    expect(mockClient.listExportConfigs).toHaveBeenCalled();
+    const result = await listExportConfigs(mockClient as any, {});
+    expect(mockClient.listExportConfigs).toHaveBeenCalledWith({
+      statuses: undefined,
+      items: 20,
+      page: 1,
+    });
     expect(result.data).toEqual([{ id: 1 }]);
+  });
+
+  it('should forward explicit statuses/items/page', async () => {
+    mockClient.listExportConfigs.mockResolvedValue([]);
+    await listExportConfigs(mockClient as any, { statuses: 'COMPLETED', items: 5, page: 3 });
+    expect(mockClient.listExportConfigs).toHaveBeenCalledWith({
+      statuses: 'COMPLETED',
+      items: 5,
+      page: 3,
+    });
   });
 
   it('should get export config by id', async () => {

@@ -2,9 +2,21 @@ import type { APIClient } from '../../api-client/api-client.js';
 import type { CorsOriginId } from '../../lib/api/branded-types.js';
 import type { CommandResult } from '../types.js';
 
-export async function listCorsOrigins(client: APIClient): Promise<CommandResult<unknown>> {
-  const data = await client.listCorsOrigins();
-  return { data };
+const DEFAULT_LIST_PAGE_SIZE = 20;
+
+export interface ListCorsOriginsParams {
+  items?: number | undefined;
+  page?: number | undefined;
+}
+
+export async function listCorsOrigins(
+  client: APIClient,
+  params: ListCorsOriginsParams = {}
+): Promise<CommandResult<unknown>> {
+  const items = params.items ?? DEFAULT_LIST_PAGE_SIZE;
+  const page = params.page ?? 1;
+  const data = await client.listCorsOrigins({ items, page });
+  return { data, pagination: { page, items, hasMore: (data as unknown[]).length >= items } };
 }
 
 export interface GetCorsOriginParams {

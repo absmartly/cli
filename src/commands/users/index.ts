@@ -319,7 +319,7 @@ const getCommand = new Command('get')
       const client = await getAPIClientFromOptions(globalOptions);
       const { show = [], exclude = [], showOnly } = globalOptions;
 
-      const result = await coreGetUser(client, { id });
+      const result = await coreGetUser(client, { id, raw: true });
       const user = result.data;
       const data = globalOptions.raw
         ? user

@@ -6,6 +6,7 @@ import {
   printResult,
   withErrorHandling,
 } from '../../lib/utils/api-helper.js';
+import { addPaginationOptions, printPaginationFooter } from '../../lib/utils/pagination.js';
 import { parseAssetRoleId } from '../../lib/utils/validators.js';
 import type { AssetRoleId } from '../../lib/api/branded-types.js';
 import {
@@ -20,12 +21,20 @@ export const assetRolesCommand = new Command('asset-roles')
   .alias('assetroles')
   .description('Asset role commands');
 
-const listCommand = new Command('list').description('List all asset roles').action(
-  withErrorHandling(async () => {
+const listCommand = addPaginationOptions(
+  new Command('list').description('List all asset roles')
+).action(
+  withErrorHandling(async (options) => {
     const globalOptions = getGlobalOptions(listCommand);
     const client = await getAPIClientFromOptions(globalOptions);
-    const result = await listAssetRoles(client);
+    const result = await listAssetRoles(client, { items: options.items, page: options.page });
     printFormatted(result.data, globalOptions);
+    printPaginationFooter(
+      (result.data as unknown[]).length,
+      options.items,
+      options.page,
+      globalOptions.output as string
+    );
   })
 );
 
