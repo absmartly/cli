@@ -16,11 +16,17 @@ describe('cors', () => {
     deleteCorsOrigin: vi.fn(),
   };
 
-  it('should list cors origins', async () => {
+  it('should default items/page and forward to client', async () => {
     mockClient.listCorsOrigins.mockResolvedValue([{ id: 1 }]);
-    const result = await listCorsOrigins(mockClient as any);
-    expect(mockClient.listCorsOrigins).toHaveBeenCalled();
+    const result = await listCorsOrigins(mockClient as any, {});
+    expect(mockClient.listCorsOrigins).toHaveBeenCalledWith({ items: 20, page: 1 });
     expect(result.data).toEqual([{ id: 1 }]);
+  });
+
+  it('should forward explicit items/page', async () => {
+    mockClient.listCorsOrigins.mockResolvedValue([]);
+    await listCorsOrigins(mockClient as any, { items: 5, page: 3 });
+    expect(mockClient.listCorsOrigins).toHaveBeenCalledWith({ items: 5, page: 3 });
   });
 
   it('should get cors origin by id', async () => {

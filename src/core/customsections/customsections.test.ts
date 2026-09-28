@@ -16,11 +16,25 @@ describe('customsections', () => {
     reorderCustomSections: vi.fn(),
   };
 
-  it('should list custom sections', async () => {
+  it('should default items/page and forward to client', async () => {
     mockClient.listCustomSections.mockResolvedValue([{ id: 1 }]);
-    const result = await listCustomSections(mockClient as any);
-    expect(mockClient.listCustomSections).toHaveBeenCalled();
+    const result = await listCustomSections(mockClient as any, {});
+    expect(mockClient.listCustomSections).toHaveBeenCalledWith({
+      type: undefined,
+      items: 20,
+      page: 1,
+    });
     expect(result.data).toEqual([{ id: 1 }]);
+  });
+
+  it('should forward explicit type/items/page', async () => {
+    mockClient.listCustomSections.mockResolvedValue([]);
+    await listCustomSections(mockClient as any, { type: 'text', items: 5, page: 3 });
+    expect(mockClient.listCustomSections).toHaveBeenCalledWith({
+      type: 'text',
+      items: 5,
+      page: 3,
+    });
   });
 
   it('should create custom section', async () => {

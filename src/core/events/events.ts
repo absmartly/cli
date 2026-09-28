@@ -55,6 +55,8 @@ export function formatEventRowTimestamps(
   });
 }
 
+const DEFAULT_EVENTS_TAKE = 100;
+
 export interface ListEventsParams {
   from?: number | undefined;
   to?: number | undefined;
@@ -88,7 +90,7 @@ export async function listEvents(
 
   const body: Record<string, unknown> = {};
   if (Object.keys(filters).length > 0) body.filters = filters;
-  if (params.take !== undefined) body.take = params.take;
+  body.take = params.take ?? DEFAULT_EVENTS_TAKE;
   if (params.skip !== undefined) body.skip = params.skip;
 
   const data = await client.listEvents(body as Parameters<typeof client.listEvents>[0]);

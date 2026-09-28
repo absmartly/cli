@@ -6,6 +6,7 @@ import {
   printResult,
   withErrorHandling,
 } from '../../lib/utils/api-helper.js';
+import { addPaginationOptions, printPaginationFooter } from '../../lib/utils/pagination.js';
 import { parseExportConfigId, validateJSON } from '../../lib/utils/validators.js';
 import type { ExportConfigId } from '../../lib/api/branded-types.js';
 import {
@@ -23,12 +24,23 @@ export const exportConfigsCommand = new Command('export-configs')
   .aliases(['exportconfigs', 'export-config'])
   .description('Export configuration management');
 
-const listCommand = new Command('list').description('List export configurations').action(
-  withErrorHandling(async () => {
+const listCommand = addPaginationOptions(
+  new Command('list').description('List export configurations')
+).action(
+  withErrorHandling(async (options) => {
     const globalOptions = getGlobalOptions(listCommand);
     const client = await getAPIClientFromOptions(globalOptions);
-    const result = await coreListExportConfigs(client);
+    const result = await coreListExportConfigs(client, {
+      items: options.items,
+      page: options.page,
+    });
     printFormatted(result.data, globalOptions);
+    printPaginationFooter(
+      (result.data as unknown[]).length,
+      options.items,
+      options.page,
+      globalOptions.output as string
+    );
   })
 );
 

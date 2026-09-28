@@ -2,6 +2,7 @@ import type { APIClient } from '../../api-client/api-client.js';
 import type { CommandResult } from '../types.js';
 import type { TagId } from '../../lib/api/branded-types.js';
 import { requireAtLeastOneField } from '../../lib/utils/validators.js';
+import { summarizeTagRow } from '../../api-client/entity-summary.js';
 
 export interface ListTagsParams {
   items: number;
@@ -13,7 +14,7 @@ export async function listTags(
   params: ListTagsParams
 ): Promise<CommandResult<unknown[]>> {
   const data = await client.listExperimentTags({ items: params.items, page: params.page });
-  return { data };
+  return { data, rows: (data as Array<Record<string, unknown>>).map(summarizeTagRow) };
 }
 
 export interface GetTagParams {

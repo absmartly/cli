@@ -62,4 +62,55 @@ describe('notifications', () => {
     expect(mockClient.hasNewNotifications).toHaveBeenCalledWith(undefined);
     expect(result.data).toEqual({ hasNew: false });
   });
+
+  describe('listNotifications limit', () => {
+    it('should cap results to the default limit and warn when truncated', async () => {
+      const all = Array.from({ length: 50 }, (_, i) => ({ id: i }));
+      mockClient.getNotifications.mockResolvedValue(all);
+
+      const result = await listNotifications(mockClient as any, {});
+
+      expect((result.data as unknown[]).length).toBe(20);
+      expect(result.warnings).toEqual([
+        'Showing 20 of 50 notifications. Use --limit to show more.',
+      ]);
+    });
+
+    it('should not warn when under the limit', async () => {
+      mockClient.getNotifications.mockResolvedValue([{ id: 1 }]);
+      const result = await listNotifications(mockClient as any, {});
+      expect(result.warnings).toBeUndefined();
+    });
+
+    it('should respect an explicit limit', async () => {
+      const all = Array.from({ length: 50 }, (_, i) => ({ id: i }));
+      mockClient.getNotifications.mockResolvedValue(all);
+      const result = await listNotifications(mockClient as any, { limit: 5 });
+      expect((result.data as unknown[]).length).toBe(5);
+    });
+
+    it('should fall back to the default limit for a negative value instead of an inverted slice', async () => {
+      const all = Array.from({ length: 50 }, (_, i) => ({ id: i }));
+      mockClient.getNotifications.mockResolvedValue(all);
+      const result = await listNotifications(mockClient as any, { limit: -1 });
+      expect((result.data as unknown[]).length).toBe(20);
+      expect(result.warnings).toEqual([
+        'Showing 20 of 50 notifications. Use --limit to show more.',
+      ]);
+    });
+
+    it('should fall back to the default limit for a non-integer value instead of silently returning nothing', async () => {
+      const all = Array.from({ length: 50 }, (_, i) => ({ id: i }));
+      mockClient.getNotifications.mockResolvedValue(all);
+      const result = await listNotifications(mockClient as any, { limit: NaN });
+      expect((result.data as unknown[]).length).toBe(20);
+    });
+
+    it('should fall back to the default limit for zero', async () => {
+      const all = Array.from({ length: 50 }, (_, i) => ({ id: i }));
+      mockClient.getNotifications.mockResolvedValue(all);
+      const result = await listNotifications(mockClient as any, { limit: 0 });
+      expect((result.data as unknown[]).length).toBe(20);
+    });
+  });
 });

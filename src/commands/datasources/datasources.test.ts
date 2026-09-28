@@ -77,8 +77,14 @@ describe('datasources command', () => {
   it('should list datasources', async () => {
     await datasourcesCommand.parseAsync(['node', 'test', 'list']);
 
-    expect(mockClient.listDatasources).toHaveBeenCalled();
+    expect(mockClient.listDatasources).toHaveBeenCalledWith({ items: 20, page: 1 });
     expect(printFormatted).toHaveBeenCalled();
+  });
+
+  it('should list datasources with pagination', async () => {
+    await datasourcesCommand.parseAsync(['node', 'test', 'list', '--items', '10', '--page', '2']);
+
+    expect(mockClient.listDatasources).toHaveBeenCalledWith({ items: 10, page: 2 });
   });
 
   it('should get datasource by id', async () => {

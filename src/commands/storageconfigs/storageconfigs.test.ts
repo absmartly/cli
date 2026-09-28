@@ -52,8 +52,22 @@ describe('storage-configs command', () => {
   it('should list storage configs', async () => {
     await storageConfigsCommand.parseAsync(['node', 'test', 'list']);
 
-    expect(mockClient.listStorageConfigs).toHaveBeenCalled();
+    expect(mockClient.listStorageConfigs).toHaveBeenCalledWith({ items: 20, page: 1 });
     expect(printFormatted).toHaveBeenCalled();
+  });
+
+  it('should list storage configs with pagination', async () => {
+    await storageConfigsCommand.parseAsync([
+      'node',
+      'test',
+      'list',
+      '--items',
+      '10',
+      '--page',
+      '2',
+    ]);
+
+    expect(mockClient.listStorageConfigs).toHaveBeenCalledWith({ items: 10, page: 2 });
   });
 
   it('should get storage config by id', async () => {

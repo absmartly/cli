@@ -7,6 +7,7 @@ import {
   withErrorHandling,
 } from '../../lib/utils/api-helper.js';
 import { validateJSON } from '../../lib/utils/validators.js';
+import { addPaginationOptions, printPaginationFooter } from '../../lib/utils/pagination.js';
 import {
   listStorageConfigs,
   getStorageConfig,
@@ -19,12 +20,23 @@ export const storageConfigsCommand = new Command('storage-configs')
   .aliases(['storageconfigs', 'storage-config'])
   .description('Storage config management');
 
-const listCommand = new Command('list').description('List storage configs').action(
-  withErrorHandling(async () => {
+const listCommand = addPaginationOptions(
+  new Command('list').description('List storage configs')
+).action(
+  withErrorHandling(async (options) => {
     const globalOptions = getGlobalOptions(listCommand);
     const client = await getAPIClientFromOptions(globalOptions);
-    const result = await listStorageConfigs(client);
+    const result = await listStorageConfigs(client, {
+      items: options.items,
+      page: options.page,
+    });
     printFormatted(result.data, globalOptions);
+    printPaginationFooter(
+      (result.data as unknown[]).length,
+      options.items,
+      options.page,
+      globalOptions.output as string
+    );
   })
 );
 

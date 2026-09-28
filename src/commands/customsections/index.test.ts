@@ -55,8 +55,32 @@ describe('custom-sections command', () => {
 
       await customSectionsCommand.parseAsync(['node', 'test', 'list']);
 
-      expect(mockClient.listCustomSections).toHaveBeenCalled();
+      expect(mockClient.listCustomSections).toHaveBeenCalledWith({
+        type: undefined,
+        items: 20,
+        page: 1,
+      });
       expect(printFormatted).toHaveBeenCalledWith([{ id: 1 }, { id: 2 }], expect.any(Object));
+    });
+
+    it('should list custom sections with pagination', async () => {
+      mockClient.listCustomSections.mockResolvedValue([]);
+
+      await customSectionsCommand.parseAsync([
+        'node',
+        'test',
+        'list',
+        '--items',
+        '10',
+        '--page',
+        '2',
+      ]);
+
+      expect(mockClient.listCustomSections).toHaveBeenCalledWith({
+        type: undefined,
+        items: 10,
+        page: 2,
+      });
     });
   });
 

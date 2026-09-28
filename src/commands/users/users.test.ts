@@ -262,6 +262,27 @@ describe('users command', () => {
     );
   });
 
+  it('requests raw data from coreGetUser so its own summarization sees all fields', async () => {
+    mockClient.getUser.mockResolvedValueOnce({
+      id: 1,
+      email: 'a@b.com',
+      first_name: 'Jane',
+      last_name: 'Doe',
+      roles: [{ id: 1, permissions: ['x'] }],
+      avatar: { base_url: '/avatars/1' },
+    });
+
+    await usersCommand.parseAsync(['node', 'test', 'get', '1']);
+
+    // If coreGetUser weren't asked for raw:true, its own default summarization would
+    // strip first_name/last_name before this command re-derives `name` from them,
+    // collapsing the name to ''.
+    expect(printFormatted).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 1, name: 'Jane Doe' }),
+      expect.anything()
+    );
+  });
+
   it('should create a user', async () => {
     await usersCommand.parseAsync([
       'node',

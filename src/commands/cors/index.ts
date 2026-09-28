@@ -6,6 +6,7 @@ import {
   printResult,
   withErrorHandling,
 } from '../../lib/utils/api-helper.js';
+import { addPaginationOptions, printPaginationFooter } from '../../lib/utils/pagination.js';
 import { parseCorsOriginId } from '../../lib/utils/validators.js';
 import type { CorsOriginId } from '../../lib/api/branded-types.js';
 import {
@@ -18,12 +19,20 @@ import {
 
 export const corsCommand = new Command('cors').description('CORS origins management');
 
-const listCommand = new Command('list').description('List CORS allowed origins').action(
-  withErrorHandling(async () => {
+const listCommand = addPaginationOptions(
+  new Command('list').description('List CORS allowed origins')
+).action(
+  withErrorHandling(async (options) => {
     const globalOptions = getGlobalOptions(listCommand);
     const client = await getAPIClientFromOptions(globalOptions);
-    const result = await listCorsOrigins(client);
+    const result = await listCorsOrigins(client, { items: options.items, page: options.page });
     printFormatted(result.data, globalOptions);
+    printPaginationFooter(
+      (result.data as unknown[]).length,
+      options.items,
+      options.page,
+      globalOptions.output as string
+    );
   })
 );
 

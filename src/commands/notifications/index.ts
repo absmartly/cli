@@ -19,15 +19,34 @@ export const notificationsCommand = new Command('notifications')
   .alias('notif')
   .description('Notifications commands');
 
+function parsePositiveIntFlag(value: string, flag: string): number {
+  const parsed = parseInt(value, 10);
+  if (Number.isNaN(parsed) || parsed <= 0) {
+    throw new Error(`Invalid value for ${flag}: "${value}". Expected a positive integer.`);
+  }
+  return parsed;
+}
+
 const listCommand = new Command('list')
   .description('List notifications')
   .option('--cursor <n>', 'pagination cursor', parseInt)
+  .option('--limit <n>', 'max number of notifications to show')
   .action(
     withErrorHandling(async (options) => {
       const globalOptions = getGlobalOptions(listCommand);
       const client = await getAPIClientFromOptions(globalOptions);
-      const result = await coreListNotifications(client, { cursor: options.cursor });
+      const limit =
+        options.limit !== undefined ? parsePositiveIntFlag(options.limit, '--limit') : undefined;
+      const result = await coreListNotifications(client, {
+        cursor: options.cursor,
+        limit,
+      });
       printFormatted(result.data, globalOptions);
+      if (result.warnings && globalOptions.output !== 'json' && globalOptions.output !== 'yaml') {
+        for (const w of result.warnings) {
+          console.log(chalk.gray(w));
+        }
+      }
     })
   );
 

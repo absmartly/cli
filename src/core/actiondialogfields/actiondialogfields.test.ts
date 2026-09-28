@@ -16,14 +16,28 @@ const mockClient = {
 beforeEach(() => vi.clearAllMocks());
 
 describe('listActionDialogFields', () => {
-  it('should call client.listExperimentActionDialogFields and return data', async () => {
+  it('should default items/page and forward to client', async () => {
     const mockData = [{ id: 1 }, { id: 2 }];
     mockClient.listExperimentActionDialogFields.mockResolvedValue(mockData);
 
-    const result = await listActionDialogFields(mockClient);
+    const result = await listActionDialogFields(mockClient, {});
 
-    expect(mockClient.listExperimentActionDialogFields).toHaveBeenCalledOnce();
-    expect(result).toEqual({ data: mockData });
+    expect(mockClient.listExperimentActionDialogFields).toHaveBeenCalledWith({
+      items: 20,
+      page: 1,
+    });
+    expect(result.data).toEqual(mockData);
+  });
+
+  it('should forward explicit items/page', async () => {
+    mockClient.listExperimentActionDialogFields.mockResolvedValue([]);
+
+    await listActionDialogFields(mockClient, { items: 5, page: 3 });
+
+    expect(mockClient.listExperimentActionDialogFields).toHaveBeenCalledWith({
+      items: 5,
+      page: 3,
+    });
   });
 });
 

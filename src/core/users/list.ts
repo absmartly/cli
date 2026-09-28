@@ -1,5 +1,6 @@
 import type { APIClient } from '../../api-client/api-client.js';
 import type { CommandResult } from '../types.js';
+import { summarizeUserRow } from '../../api-client/entity-summary.js';
 
 export interface ListUsersParams {
   items?: number | undefined;
@@ -34,6 +35,7 @@ export async function listUsers(
   const data = await client.listUsers(opts);
   return {
     data,
+    rows: (data as Array<Record<string, unknown>>).map(summarizeUserRow),
     pagination: {
       page: params.page ?? 1,
       items: params.items ?? 25,

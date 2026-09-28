@@ -3,9 +3,22 @@ import type { CustomSectionId } from '../../lib/api/branded-types.js';
 import type { CommandResult } from '../types.js';
 import { requireAtLeastOneField } from '../../lib/utils/validators.js';
 
-export async function listCustomSections(client: APIClient): Promise<CommandResult<unknown>> {
-  const data = await client.listCustomSections();
-  return { data };
+const DEFAULT_LIST_PAGE_SIZE = 20;
+
+export interface ListCustomSectionsParams {
+  type?: string | undefined;
+  items?: number | undefined;
+  page?: number | undefined;
+}
+
+export async function listCustomSections(
+  client: APIClient,
+  params: ListCustomSectionsParams = {}
+): Promise<CommandResult<unknown>> {
+  const items = params.items ?? DEFAULT_LIST_PAGE_SIZE;
+  const page = params.page ?? 1;
+  const data = await client.listCustomSections({ type: params.type, items, page });
+  return { data, pagination: { page, items, hasMore: (data as unknown[]).length >= items } };
 }
 
 export interface CreateCustomSectionParams {

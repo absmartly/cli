@@ -9,11 +9,7 @@ import {
 } from '../../lib/utils/api-helper.js';
 import { parseMetricId } from '../../lib/utils/validators.js';
 import type { MetricId } from '../../lib/api/branded-types.js';
-import {
-  applyShowExclude,
-  summarizeMetric,
-  summarizeMetricRow,
-} from '../../api-client/entity-summary.js';
+import { summarizeMetricRow } from '../../api-client/entity-summary.js';
 import { createListCommand } from '../../lib/utils/list-command.js';
 import { listMetrics as coreListMetrics, listAllMetrics } from '../../core/metrics/list.js';
 import {
@@ -119,17 +115,14 @@ const getCommand = new Command('get')
       const client = await getAPIClientFromOptions(globalOptions);
       const { show = [], exclude = [], showOnly } = globalOptions;
 
-      const result = await getMetric(client, { id });
-      const data = globalOptions.raw
-        ? result.data
-        : applyShowExclude(
-            summarizeMetric(result.data as Record<string, unknown>),
-            result.data as Record<string, unknown>,
-            show,
-            exclude,
-            showOnly
-          );
-      printFormatted(data, globalOptions);
+      const result = await getMetric(client, {
+        id,
+        show,
+        exclude,
+        showOnly,
+        raw: globalOptions.raw,
+      });
+      printFormatted(result.data, globalOptions);
     })
   );
 

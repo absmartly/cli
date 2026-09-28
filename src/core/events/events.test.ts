@@ -107,7 +107,7 @@ describe('events', () => {
     it('should omit empty filters', async () => {
       mockClient.listEvents.mockResolvedValue([]);
       await listEvents(mockClient as any, {});
-      expect(mockClient.listEvents).toHaveBeenCalledWith({});
+      expect(mockClient.listEvents).toHaveBeenCalledWith({ take: 100 });
     });
 
     it('should send effective_exposures=true when validExposures is true', async () => {
@@ -115,6 +115,7 @@ describe('events', () => {
       await listEvents(mockClient as any, { validExposures: true });
       expect(mockClient.listEvents).toHaveBeenCalledWith({
         filters: { effective_exposures: true },
+        take: 100,
       });
     });
 
@@ -123,13 +124,28 @@ describe('events', () => {
       await listEvents(mockClient as any, { validExposures: false });
       expect(mockClient.listEvents).toHaveBeenCalledWith({
         filters: { effective_exposures: false },
+        take: 100,
       });
     });
 
     it('should omit effective_exposures when validExposures is undefined', async () => {
       mockClient.listEvents.mockResolvedValue([]);
       await listEvents(mockClient as any, { from: 1 });
-      expect(mockClient.listEvents).toHaveBeenCalledWith({ filters: { from: 1 } });
+      expect(mockClient.listEvents).toHaveBeenCalledWith({ filters: { from: 1 }, take: 100 });
+    });
+  });
+
+  describe('listEvents default take', () => {
+    it('should apply a default take when not specified', async () => {
+      mockClient.listEvents.mockResolvedValue({ columnNames: [], rows: [] });
+      await listEvents(mockClient as any, {});
+      expect(mockClient.listEvents).toHaveBeenCalledWith(expect.objectContaining({ take: 100 }));
+    });
+
+    it('should respect an explicit take', async () => {
+      mockClient.listEvents.mockResolvedValue({ columnNames: [], rows: [] });
+      await listEvents(mockClient as any, { take: 500 });
+      expect(mockClient.listEvents).toHaveBeenCalledWith(expect.objectContaining({ take: 500 }));
     });
   });
 

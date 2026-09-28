@@ -36,11 +36,17 @@ describe('datasources', () => {
     previewDatasourceJsonLayouts: vi.fn(),
   };
 
-  it('should list datasources', async () => {
+  it('should default items/page and forward to client', async () => {
     mockClient.listDatasources.mockResolvedValue([{ id: 1 }]);
-    const result = await listDatasources(mockClient as any);
-    expect(mockClient.listDatasources).toHaveBeenCalled();
+    const result = await listDatasources(mockClient as any, {});
+    expect(mockClient.listDatasources).toHaveBeenCalledWith({ items: 20, page: 1 });
     expect(result.data).toEqual([{ id: 1 }]);
+  });
+
+  it('should forward explicit items/page', async () => {
+    mockClient.listDatasources.mockResolvedValue([]);
+    await listDatasources(mockClient as any, { items: 5, page: 3 });
+    expect(mockClient.listDatasources).toHaveBeenCalledWith({ items: 5, page: 3 });
   });
 
   it('should get datasource by id', async () => {

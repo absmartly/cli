@@ -18,14 +18,22 @@ const mockClient = {
 beforeEach(() => vi.clearAllMocks());
 
 describe('listAssetRoles', () => {
-  it('should call client.listAssetRoles and return data', async () => {
+  it('should default items/page and forward to client', async () => {
     const mockData = [{ id: 1 }, { id: 2 }];
     mockClient.listAssetRoles.mockResolvedValue(mockData);
 
-    const result = await listAssetRoles(mockClient);
+    const result = await listAssetRoles(mockClient, {});
 
-    expect(mockClient.listAssetRoles).toHaveBeenCalledOnce();
-    expect(result).toEqual({ data: mockData });
+    expect(mockClient.listAssetRoles).toHaveBeenCalledWith({ items: 20, page: 1 });
+    expect(result.data).toEqual(mockData);
+  });
+
+  it('should forward explicit items/page', async () => {
+    mockClient.listAssetRoles.mockResolvedValue([]);
+
+    await listAssetRoles(mockClient, { items: 5, page: 3 });
+
+    expect(mockClient.listAssetRoles).toHaveBeenCalledWith({ items: 5, page: 3 });
   });
 });
 

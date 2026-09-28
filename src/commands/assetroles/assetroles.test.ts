@@ -52,8 +52,14 @@ describe('asset-roles command', () => {
   it('should list asset roles', async () => {
     mockClient.listAssetRoles.mockResolvedValue([{ id: 1, name: 'editor' }]);
     await assetRolesCommand.parseAsync(['node', 'test', 'list']);
-    expect(mockClient.listAssetRoles).toHaveBeenCalled();
+    expect(mockClient.listAssetRoles).toHaveBeenCalledWith({ items: 20, page: 1 });
     expect(printFormatted).toHaveBeenCalledWith([{ id: 1, name: 'editor' }], expect.anything());
+  });
+
+  it('should list asset roles with pagination', async () => {
+    mockClient.listAssetRoles.mockResolvedValue([]);
+    await assetRolesCommand.parseAsync(['node', 'test', 'list', '--items', '10', '--page', '2']);
+    expect(mockClient.listAssetRoles).toHaveBeenCalledWith({ items: 10, page: 2 });
   });
 
   it('should get asset role by id', async () => {
