@@ -416,6 +416,58 @@ describe('metrics command', () => {
     );
   });
 
+  it('should use the last --datasource-id when the flag is repeated, not a radix-confused value', async () => {
+    await metricsCommand.parseAsync([
+      'node',
+      'test',
+      'create',
+      '--name',
+      'BQ conversions',
+      '--type',
+      'custom_sql',
+      '--description',
+      'BigQuery conversions',
+      '--custom-sql',
+      'SELECT 1',
+      '--custom-statistics-type',
+      'binomial',
+      '--datasource-id',
+      '16',
+      '--datasource-id',
+      '10',
+    ]);
+
+    expect(mockClient.createMetric).toHaveBeenCalledWith(
+      expect.objectContaining({
+        datasource_id: 10,
+      })
+    );
+  });
+
+  it('should reject a --datasource-id with trailing non-numeric characters', async () => {
+    await expect(
+      metricsCommand.parseAsync([
+        'node',
+        'test',
+        'create',
+        '--name',
+        'BQ conversions',
+        '--type',
+        'custom_sql',
+        '--description',
+        'BigQuery conversions',
+        '--custom-sql',
+        'SELECT 1',
+        '--custom-statistics-type',
+        'binomial',
+        '--datasource-id',
+        '10x',
+      ])
+    ).rejects.toThrow();
+
+    expect(mockClient.createMetric).not.toHaveBeenCalled();
+  });
+
   it('should create a goal_ratio metric with numerator and denominator types', async () => {
     await metricsCommand.parseAsync([
       'node',

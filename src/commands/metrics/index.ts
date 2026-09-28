@@ -7,7 +7,7 @@ import {
   printResult,
   withErrorHandling,
 } from '../../lib/utils/api-helper.js';
-import { parseMetricId } from '../../lib/utils/validators.js';
+import { parseMetricId, parseDatasourceId } from '../../lib/utils/validators.js';
 import type { MetricId } from '../../lib/api/branded-types.js';
 import { summarizeMetricRow } from '../../api-client/entity-summary.js';
 import { createListCommand } from '../../lib/utils/list-command.js';
@@ -176,7 +176,7 @@ function addMetricFieldOptions(cmd: Command): Command {
       .option(
         '--datasource-id <id>',
         'datasource ID the custom SQL runs against (custom_sql)',
-        parseInt
+        parseDatasourceId
       )
       .option('--vr-lookback-interval <interval>', 'VR lookback interval (1w, 2w, 3w, 4w)')
       .option('--relation-kind <kind>', 'goal relation kind (refund, replacement)')
