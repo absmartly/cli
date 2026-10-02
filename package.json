@@ -51,12 +51,12 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/absmartly/cli-ts.git"
+    "url": "https://github.com/absmartly/cli.git"
   },
   "bugs": {
-    "url": "https://github.com/absmartly/cli-ts/issues"
+    "url": "https://github.com/absmartly/cli/issues"
   },
-  "homepage": "https://github.com/absmartly/cli-ts#readme",
+  "homepage": "https://github.com/absmartly/cli#readme",
   "bin": {
     "abs": "./dist/index.js",
     "absmartly-cli": "./dist/index.js"
