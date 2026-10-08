@@ -239,7 +239,7 @@ export function summarizeExperimentRow(
   for (const field of lookupFields) {
     if (field in row) continue;
     if (roleNames && METRIC_ROLE_FIELDS.has(field.toLowerCase())) {
-      row[field] = roleNames.get(field.toLowerCase())?.join(', ') ?? '';
+      row[field] = roleNames.get(field.toLowerCase()) ?? [];
       continue;
     }
     if (field in exp) {

@@ -325,9 +325,9 @@ describe('summarizeExperimentRow', () => {
         'guardrail_metrics',
         'exploratory_metrics',
       ]);
-      expect(row.secondary_metrics).toBe('revenue, untyped, 6');
-      expect(row.guardrail_metrics).toBe('errors, latency');
-      expect(row.exploratory_metrics).toBe('clicks');
+      expect(row.secondary_metrics).toEqual(['revenue', 'untyped', '6']);
+      expect(row.guardrail_metrics).toEqual(['errors', 'latency']);
+      expect(row.exploratory_metrics).toEqual(['clicks']);
     });
 
     it('should support metric role columns via --show-only', () => {
@@ -337,21 +337,25 @@ describe('summarizeExperimentRow', () => {
         [],
         ['id', 'primary_metric', 'guardrail_metrics']
       );
-      expect(row).toEqual({ id: 10, primary_metric: 'ctr', guardrail_metrics: 'errors, latency' });
+      expect(row).toEqual({
+        id: 10,
+        primary_metric: 'ctr',
+        guardrail_metrics: ['errors', 'latency'],
+      });
     });
 
     it('should match metric role columns case-insensitively', () => {
       const row = summarizeExperimentRow(exp, ['Guardrail_Metrics']);
-      expect(row.Guardrail_Metrics).toBe('errors, latency');
+      expect(row.Guardrail_Metrics).toEqual(['errors', 'latency']);
     });
 
-    it('should return empty strings when the experiment has no metrics in a role', () => {
+    it('should return empty arrays when the experiment has no metrics in a role', () => {
       const row = summarizeExperimentRow(baseExperiment, [
         'secondary_metrics',
         'guardrail_metrics',
       ]);
-      expect(row.secondary_metrics).toBe('');
-      expect(row.guardrail_metrics).toBe('');
+      expect(row.secondary_metrics).toEqual([]);
+      expect(row.guardrail_metrics).toEqual([]);
     });
   });
 

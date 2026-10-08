@@ -277,7 +277,12 @@ export function formatValue(value: unknown, options: OutputOptions = {}): string
     }
     return text;
   }
-  if (Array.isArray(value)) return value.map((v) => formatValue(v, options)).join(', ');
+  if (Array.isArray(value)) {
+    // One item per line in cell-based formats keeps multi-value columns narrow;
+    // line-oriented formats (plain, markdown) need them on a single line.
+    const separator = options.format === 'table' || options.format === 'vertical' ? '\n' : ', ';
+    return value.map((v) => formatValue(v, options)).join(separator);
+  }
   if (isObject(value)) {
     const summary = summarizeObjectValue(value);
     if (summary !== null) return summary;

@@ -224,6 +224,19 @@ describe('Output Formatter', () => {
       expect(lines[1]!.split('\t')).toEqual(['2', '', 'b']);
     });
 
+    it('should put array items on separate lines in table cells', () => {
+      const result = formatOutput([{ id: 1, metrics: ['a', 'b'] }], 'table', { noColor: true });
+      expect(result).toMatch(/│ a\s+│/);
+      expect(result).toMatch(/│ b\s+│/);
+      expect(result).not.toContain('a, b');
+    });
+
+    it('should keep array items comma-joined in plain and markdown', () => {
+      const rows = [{ id: 1, metrics: ['a', 'b'] }];
+      expect(formatOutput(rows, 'plain', { noColor: true })).toBe('1\ta, b');
+      expect(formatOutput(rows, 'markdown', { noColor: true })).toContain('| 1 | a, b |');
+    });
+
     it('should format as markdown', () => {
       const result = formatOutput(testData, 'markdown');
       expect(result).toContain('|');
