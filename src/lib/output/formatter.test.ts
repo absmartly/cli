@@ -220,8 +220,8 @@ describe('Output Formatter', () => {
         { id: 2, name: 'b' },
       ];
       const lines = formatOutput(rows, 'plain', { noColor: true }).split('\n');
-      expect(lines[0]!.split('\t')).toHaveLength(3);
-      expect(lines[1]!.split('\t')).toHaveLength(3);
+      expect(lines[0]!.split('\t')).toEqual(['1', 'x', '']);
+      expect(lines[1]!.split('\t')).toEqual(['2', '', 'b']);
     });
 
     it('should format as markdown', () => {
