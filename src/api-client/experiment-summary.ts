@@ -23,7 +23,9 @@ function metricNamesByRole(
   for (const m of metrics ?? []) {
     const field = `${(m.type as string) || 'secondary'}_metrics`;
     const name = String((m.metric as Record<string, unknown>)?.name ?? m.metric_id);
-    byRole.set(field, [...(byRole.get(field) ?? []), name]);
+    const names = byRole.get(field);
+    if (names) names.push(name);
+    else byRole.set(field, [name]);
   }
   return byRole;
 }
