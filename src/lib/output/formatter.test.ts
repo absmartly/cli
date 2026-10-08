@@ -194,6 +194,36 @@ describe('Output Formatter', () => {
       expect(result).toContain('value');
     });
 
+    it('should include columns that are missing from the first row in a table', () => {
+      const rows = [
+        { id: 1, name: 'a' },
+        { id: 2, name: 'b', extra: 'only-here' },
+      ];
+      const result = formatOutput(rows, 'table', { noColor: true });
+      expect(result).toContain('extra');
+      expect(result).toContain('only-here');
+    });
+
+    it('should include columns that are missing from the first row in markdown', () => {
+      const rows = [
+        { id: 1, name: 'a' },
+        { id: 2, name: 'b', extra: 'only-here' },
+      ];
+      const result = formatOutput(rows, 'markdown', { noColor: true });
+      expect(result.split('\n')[0]).toBe('| id | name | extra |');
+      expect(result).toContain('| 2 | b | only-here |');
+    });
+
+    it('should align plain columns when rows have different keys', () => {
+      const rows = [
+        { id: 1, extra: 'x' },
+        { id: 2, name: 'b' },
+      ];
+      const lines = formatOutput(rows, 'plain', { noColor: true }).split('\n');
+      expect(lines[0]!.split('\t')).toHaveLength(3);
+      expect(lines[1]!.split('\t')).toHaveLength(3);
+    });
+
     it('should format as markdown', () => {
       const result = formatOutput(testData, 'markdown');
       expect(result).toContain('|');

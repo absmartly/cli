@@ -299,6 +299,62 @@ describe('summarizeExperimentRow', () => {
     expect(row.percentages).toBe('50/50');
   });
 
+  describe('per-role metric columns', () => {
+    const exp = {
+      ...baseExperiment,
+      secondary_metrics: [
+        { metric_id: 1, type: 'secondary', metric: { name: 'revenue' } },
+        { metric_id: 2, type: 'guardrail', metric: { name: 'errors' } },
+        { metric_id: 3, type: 'guardrail', metric: { name: 'latency' } },
+        { metric_id: 4, type: 'exploratory', metric: { name: 'clicks' } },
+        { metric_id: 5, metric: { name: 'untyped' } },
+        { metric_id: 6, type: 'secondary' },
+      ],
+    };
+
+    it('should not add metric role columns unless requested', () => {
+      const row = summarizeExperimentRow(exp);
+      expect(row).not.toHaveProperty('secondary_metrics');
+      expect(row).not.toHaveProperty('guardrail_metrics');
+      expect(row).not.toHaveProperty('exploratory_metrics');
+    });
+
+    it('should split secondary_metrics by role when requested via --show', () => {
+      const row = summarizeExperimentRow(exp, [
+        'secondary_metrics',
+        'guardrail_metrics',
+        'exploratory_metrics',
+      ]);
+      expect(row.secondary_metrics).toBe('revenue, untyped, 6');
+      expect(row.guardrail_metrics).toBe('errors, latency');
+      expect(row.exploratory_metrics).toBe('clicks');
+    });
+
+    it('should support metric role columns via --show-only', () => {
+      const row = summarizeExperimentRow(
+        exp,
+        [],
+        [],
+        ['id', 'primary_metric', 'guardrail_metrics']
+      );
+      expect(row).toEqual({ id: 10, primary_metric: 'ctr', guardrail_metrics: 'errors, latency' });
+    });
+
+    it('should match metric role columns case-insensitively', () => {
+      const row = summarizeExperimentRow(exp, ['Guardrail_Metrics']);
+      expect(row.Guardrail_Metrics).toBe('errors, latency');
+    });
+
+    it('should return empty strings when the experiment has no metrics in a role', () => {
+      const row = summarizeExperimentRow(baseExperiment, [
+        'secondary_metrics',
+        'guardrail_metrics',
+      ]);
+      expect(row.secondary_metrics).toBe('');
+      expect(row.guardrail_metrics).toBe('');
+    });
+  });
+
   it('should include unit_type/traffic/owner when --show overrides defaults', () => {
     const row = summarizeExperimentRow(baseExperiment, ['unit_type', 'traffic', 'owner']);
     expect(row.unit_type).toBe('device_id');

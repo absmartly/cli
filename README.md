@@ -180,6 +180,8 @@ abs experiments list --metric 42 --type test,feature --state running -o ids
 # Customize columns
 abs experiments list --show experiment_report archived   # add extra columns
 abs experiments list --exclude primary_metric owner      # hide columns
+abs experiments list --started-after "3 months ago" \
+  --show-only id name primary_metric secondary_metrics guardrail_metrics exploratory_metrics
 
 # Search by name
 abs experiments search "onboarding"
