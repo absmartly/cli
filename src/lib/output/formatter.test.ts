@@ -194,6 +194,49 @@ describe('Output Formatter', () => {
       expect(result).toContain('value');
     });
 
+    it('should include columns that are missing from the first row in a table', () => {
+      const rows = [
+        { id: 1, name: 'a' },
+        { id: 2, name: 'b', extra: 'only-here' },
+      ];
+      const result = formatOutput(rows, 'table', { noColor: true });
+      expect(result).toContain('extra');
+      expect(result).toContain('only-here');
+    });
+
+    it('should include columns that are missing from the first row in markdown', () => {
+      const rows = [
+        { id: 1, name: 'a' },
+        { id: 2, name: 'b', extra: 'only-here' },
+      ];
+      const result = formatOutput(rows, 'markdown', { noColor: true });
+      expect(result.split('\n')[0]).toBe('| id | name | extra |');
+      expect(result).toContain('| 2 | b | only-here |');
+    });
+
+    it('should align plain columns when rows have different keys', () => {
+      const rows = [
+        { id: 1, extra: 'x' },
+        { id: 2, name: 'b' },
+      ];
+      const lines = formatOutput(rows, 'plain', { noColor: true }).split('\n');
+      expect(lines[0]!.split('\t')).toEqual(['1', 'x', '']);
+      expect(lines[1]!.split('\t')).toEqual(['2', '', 'b']);
+    });
+
+    it('should put array items on separate lines in table cells', () => {
+      const result = formatOutput([{ id: 1, metrics: ['a', 'b'] }], 'table', { noColor: true });
+      expect(result).toMatch(/│ a\s+│/);
+      expect(result).toMatch(/│ b\s+│/);
+      expect(result).not.toContain('a, b');
+    });
+
+    it('should keep array items comma-joined in plain and markdown', () => {
+      const rows = [{ id: 1, metrics: ['a', 'b'] }];
+      expect(formatOutput(rows, 'plain', { noColor: true })).toBe('1\ta, b');
+      expect(formatOutput(rows, 'markdown', { noColor: true })).toContain('| 1 | a, b |');
+    });
+
     it('should format as markdown', () => {
       const result = formatOutput(testData, 'markdown');
       expect(result).toContain('|');
