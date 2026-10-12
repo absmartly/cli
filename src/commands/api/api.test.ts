@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { apiCommand } from './index.js';
 import { getAPIClientFromOptions, getGlobalOptions } from '../../lib/utils/api-helper.js';
+import { DryRunError } from '../../api-client/http-client.js';
 import { resetCommand } from '../../test/helpers/command-reset.js';
 
 vi.mock('../../lib/utils/api-helper.js', async (importOriginal) => {
@@ -74,6 +75,26 @@ describe('api command', () => {
     const output = consoleSpy.mock.calls.flat().join('\n');
     const parsed = JSON.parse(output);
     expect(parsed).toEqual({ success: true });
+  });
+
+  it('prints a dry-run confirmation instead of the response when the raw request is blocked by --dry-run', async () => {
+    vi.mocked(getGlobalOptions).mockReturnValue({ output: 'table', dryRun: true } as any);
+    mockClient.rawRequest.mockRejectedValueOnce(new DryRunError('POST', '/experiments'));
+
+    await apiCommand.parseAsync([
+      'node',
+      'test',
+      '/experiments',
+      '-X',
+      'POST',
+      '-d',
+      '{"name":"x"}',
+    ]);
+
+    expect(mockClient.rawRequest).toHaveBeenCalledWith('/experiments', 'POST', { name: 'x' }, {});
+    expect(processExitSpy).not.toHaveBeenCalled();
+    const output = consoleSpy.mock.calls.flat().join(' ');
+    expect(output).toContain('Dry run');
   });
 
   it('should reject invalid JSON in --data', async () => {
