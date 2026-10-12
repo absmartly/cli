@@ -23,7 +23,6 @@ export const cloneCommand = new Command('clone')
   .option('--state <state>', 'initial state (created, ready)', 'created')
   .option('--from-file <path>', 'apply template overrides before cloning')
   .option('-i, --interactive', 'interactive step-by-step editor')
-  .option('--dry-run', 'show the payload without creating')
   .action(
     withErrorHandling(async (id: ExperimentId, options) => {
       if (!options.name && !options.interactive) {
@@ -73,13 +72,6 @@ export const cloneCommand = new Command('clone')
           console.log(chalk.yellow(`⚠ ${w}`));
         }
         payload = result.payload as Record<string, unknown>;
-      }
-
-      if (options.dryRun) {
-        console.log(chalk.blue('Clone payload (dry-run):'));
-        console.log('');
-        console.log(JSON.stringify(payload, null, 2));
-        return;
       }
 
       const result = await cloneExperiment(client, payload as Record<string, unknown>, id);
