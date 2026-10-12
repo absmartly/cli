@@ -85,6 +85,7 @@ export async function getAPIClientFromOptions(options: GlobalOptions): Promise<A
   return createAPIClient(endpoint, auth, {
     verbose: options.verbose ?? false,
     insecure: profile.api.insecure ?? false,
+    dryRun: options.dryRun ?? false,
     showRequest: options.showRequest ?? false,
     showResponse: options.showResponse ?? false,
     curl: options.curl ?? false,
@@ -126,6 +127,7 @@ export interface GlobalOptions {
   show?: string[] | undefined;
   exclude?: string[] | undefined;
   showOnly?: string[] | undefined;
+  dryRun?: boolean;
   showRequest?: boolean;
   showResponse?: boolean;
   curl?: boolean;
@@ -163,6 +165,11 @@ export function getGlobalOptions(cmd: Command): GlobalOptions {
   // so the user doesn't have to type both.
   const statusOnly = opts.statusOnly || false;
   const showResponse = opts.showResponse || statusOnly || false;
+  // --dry-run implies --show-request (so the payload is still shown) unless the
+  // user asked for curl output instead.
+  const dryRun = opts.dryRun || false;
+  const curl = opts.curl || false;
+  const showRequest = opts.showRequest || (dryRun && !curl) || false;
 
   const show = (opts.show as string[] | undefined) ?? [];
   const exclude = (opts.exclude as string[] | undefined) ?? [];
@@ -190,9 +197,10 @@ export function getGlobalOptions(cmd: Command): GlobalOptions {
     show,
     exclude,
     showOnly,
-    showRequest: opts.showRequest || false,
+    dryRun,
+    showRequest,
     showResponse,
-    curl: opts.curl || false,
+    curl,
     showSecrets: opts.showSecrets || false,
     headersOnly: opts.headersOnly || false,
     statusOnly,

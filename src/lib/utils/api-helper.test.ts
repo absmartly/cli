@@ -168,6 +168,24 @@ describe('API Helper', () => {
       );
     });
 
+    it('should pass dryRun flag to client', async () => {
+      (loadConfig as any).mockReturnValue({ 'default-profile': 'default' });
+      (getProfile as any).mockReturnValue({
+        api: { endpoint: 'https://api.absmartly.com/v1' },
+        expctld: { endpoint: 'https://ctl.absmartly.io/v1' },
+      });
+      (getAPIKey as any).mockResolvedValue('test-key');
+      (createAPIClient as any).mockReturnValue({});
+
+      await getAPIClientFromOptions({ dryRun: true });
+
+      expect(createAPIClient).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.any(Object),
+        expect.objectContaining({ dryRun: true })
+      );
+    });
+
     it('should use default profile when not specified', async () => {
       (loadConfig as any).mockReturnValue({
         'default-profile': 'production',
@@ -200,7 +218,10 @@ describe('API Helper', () => {
         .option('--full', 'full')
         .option('--show <fields...>', 'show')
         .option('--exclude <fields...>', 'exclude')
-        .option('--show-only <fields...>', 'show only');
+        .option('--show-only <fields...>', 'show only')
+        .option('--show-request', 'show request')
+        .option('--dry-run', 'dry run')
+        .option('--curl', 'curl');
     });
 
     it('should parse options with defaults', () => {
@@ -251,6 +272,39 @@ describe('API Helper', () => {
       const options = getGlobalOptions(mockCommand);
       expect(options.statusOnly).toBe(false);
       expect(options.showResponse).toBe(false);
+    });
+
+    it('parses --dry-run and defaults it to false', () => {
+      const options = getGlobalOptions(mockCommand);
+      expect(options.dryRun).toBe(false);
+    });
+
+    it('--dry-run implies --show-request when --curl is not set', () => {
+      mockCommand.setOptionValue('dryRun', true);
+
+      const options = getGlobalOptions(mockCommand);
+      expect(options.dryRun).toBe(true);
+      expect(options.showRequest).toBe(true);
+    });
+
+    it('--dry-run does not force --show-request when --curl is explicitly set', () => {
+      mockCommand.setOptionValue('dryRun', true);
+      mockCommand.setOptionValue('curl', true);
+
+      const options = getGlobalOptions(mockCommand);
+      expect(options.dryRun).toBe(true);
+      expect(options.curl).toBe(true);
+      expect(options.showRequest).toBe(false);
+    });
+
+    it('--show-request stays on with --dry-run and --curl both set', () => {
+      mockCommand.setOptionValue('dryRun', true);
+      mockCommand.setOptionValue('curl', true);
+      mockCommand.setOptionValue('showRequest', true);
+
+      const options = getGlobalOptions(mockCommand);
+      expect(options.showRequest).toBe(true);
+      expect(options.curl).toBe(true);
     });
 
     it('parses show/exclude/show-only into arrays (defaulting show/exclude to [])', () => {

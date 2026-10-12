@@ -89,6 +89,10 @@ program
   .option(
     '--status-only',
     'print only the response status line (implies --show-response; no headers, no body)'
+  )
+  .option(
+    '--dry-run',
+    'preview the request without sending it (implies --show-request unless --curl is set)'
   );
 
 program.addCommand(experimentsCommand);
