@@ -147,13 +147,15 @@ describe('bulk command', () => {
 
       await bulkCommand.parseAsync(['node', 'test', 'start', '10', '20']);
 
-      const output = consoleSpy.mock.calls.flat().join(' ');
-      expect(output).toContain('1 previewed (dry run), 1 failed out of 2');
-      expect(consoleErrorSpy.mock.calls.flat().join(' ')).toContain('would be started');
+      const errOutput = consoleErrorSpy.mock.calls.flat().join(' ');
+      expect(errOutput).toContain('1 previewed (dry run), 1 failed out of 2');
+      expect(errOutput).toContain('would be started');
+      expect(errOutput).toContain('boom');
+      expect(consoleSpy).not.toHaveBeenCalled();
       expect(process.exitCode).toBe(1);
     });
 
-    it('reports real successes and previews together in the stdout summary', async () => {
+    it('reports real successes and previews together, all on stderr', async () => {
       mockClient.startExperiment
         .mockRejectedValueOnce(new DryRunError('PUT', '/experiments/10/start'))
         .mockResolvedValueOnce({ id: 20 })
@@ -161,8 +163,9 @@ describe('bulk command', () => {
 
       await bulkCommand.parseAsync(['node', 'test', 'start', '10', '20', '30']);
 
-      const output = consoleSpy.mock.calls.flat().join(' ');
+      const output = consoleErrorSpy.mock.calls.flat().join(' ');
       expect(output).toContain('1 succeeded, 2 previewed (dry run), 0 failed out of 3');
+      expect(consoleSpy).not.toHaveBeenCalled();
     });
   });
 
