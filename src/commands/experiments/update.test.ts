@@ -4,6 +4,7 @@ import { getAPIClientFromOptions, getGlobalOptions } from '../../lib/utils/api-h
 import { readTemplateFile } from '../../lib/template/parser.js';
 import { parseExperimentMarkdown } from '../../api-client/template/parser.js';
 import { resetCommand } from '../../test/helpers/command-reset.js';
+import { DryRunError } from '../../api-client/http-client.js';
 
 vi.mock('../../lib/utils/api-helper.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../lib/utils/api-helper.js')>();
@@ -319,13 +320,20 @@ describe('update command', () => {
     );
   });
 
-  it('should show dry-run output', async () => {
-    await updateCommand.parseAsync(['node', 'test', '42', '--display-name', 'Test', '--dry-run']);
+  it('lets the global --dry-run short-circuit at the API client (no local flag)', async () => {
+    vi.mocked(getGlobalOptions).mockReturnValue({ output: 'table', dryRun: true } as any);
+    mockClient.updateExperiment.mockRejectedValueOnce(new DryRunError('PUT', '/experiments/42'));
 
-    expect(mockClient.updateExperiment).not.toHaveBeenCalled();
+    await updateCommand.parseAsync(['node', 'test', '42', '--display-name', 'Test']);
+
+    expect(mockClient.updateExperiment).toHaveBeenCalledOnce();
     const output = consoleSpy.mock.calls.flat().join(' ');
-    expect(output).toContain('dry-run');
-    expect(output).toContain('PUT /experiments/42');
+    expect(output).toContain('Dry run');
+  });
+
+  it('has no local --dry-run option (superseded by global --dry-run)', () => {
+    const optionNames = updateCommand.options.map((o) => o.long);
+    expect(optionNames).not.toContain('--dry-run');
   });
 
   it('should pass --note to updateExperiment', async () => {
