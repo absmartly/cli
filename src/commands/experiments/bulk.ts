@@ -26,19 +26,22 @@ async function readStdinIds(): Promise<ExperimentId[]> {
   return lines.map((line) => parseExperimentId(line));
 }
 
-function printResults(results: BulkResult[], actionLabel: string) {
+function printResults(results: BulkResult[], actionLabel: string, isDryRun = false) {
   const succeeded = results.filter((r) => r.success && !r.dryRun);
   const dryRun = results.filter((r) => r.dryRun);
   const failed = results.filter((r) => !r.success);
+
+  // Under --dry-run the whole report is a preview, so none of it goes to stdout.
+  const log = isDryRun ? console.error : console.log;
 
   for (const r of dryRun) {
     console.error(chalk.blue(`  ○ ${r.name} (${r.id}) — would be ${actionLabel} (dry run)`));
   }
   for (const r of succeeded) {
-    console.log(chalk.green(`  ✓ ${r.name} (${r.id}) — ${actionLabel}`));
+    log(chalk.green(`  ✓ ${r.name} (${r.id}) — ${actionLabel}`));
   }
   for (const r of failed) {
-    console.log(chalk.red(`  ✗ ${r.name} (${r.id}) — ${r.error}`));
+    log(chalk.red(`  ✗ ${r.name} (${r.id}) — ${r.error}`));
   }
 
   const parts: string[] = [];
@@ -46,8 +49,6 @@ function printResults(results: BulkResult[], actionLabel: string) {
   if (dryRun.length > 0) parts.push(`${dryRun.length} previewed (dry run)`);
   parts.push(`${failed.length} failed`);
   const summary = `${chalk.bold('Results:')} ${parts.join(', ')} out of ${results.length}`;
-  // A run made only of dry-run previews has nothing for stdout: keep it clean.
-  const log = results.length > 0 && dryRun.length === results.length ? console.error : console.log;
   log('');
   log(summary);
   if (failed.length > 0) process.exitCode = 1;
@@ -117,7 +118,7 @@ bulkStartCommand.action(
     }
 
     const result = await bulkStart(client, ids, names, options.note);
-    printResults(result.data.results, 'started');
+    printResults(result.data.results, 'started', globalOptions.dryRun);
     if (result.warnings?.length) {
       for (const w of result.warnings) console.log(chalk.yellow(`\n⚠ ${w}`));
     }
@@ -170,7 +171,7 @@ bulkStopCommand.action(
     }
 
     const result = await bulkStop(client, ids, names, reason, options.note);
-    printResults(result.data.results, 'stopped');
+    printResults(result.data.results, 'stopped', globalOptions.dryRun);
     if (result.warnings?.length) {
       for (const w of result.warnings) console.log(chalk.yellow(`\n⚠ ${w}`));
     }
@@ -208,7 +209,7 @@ bulkArchiveCommand.action(
     }
 
     const result = await bulkArchive(client, ids, names, options.note);
-    printResults(result.data.results, 'archived');
+    printResults(result.data.results, 'archived', globalOptions.dryRun);
     if (result.warnings?.length) {
       for (const w of result.warnings) console.log(chalk.yellow(`\n⚠ ${w}`));
     }
@@ -247,7 +248,7 @@ bulkDevelopmentCommand.action(
     }
 
     const result = await bulkDevelopment(client, ids, names, options.note);
-    printResults(result.data.results, 'set to development');
+    printResults(result.data.results, 'set to development', globalOptions.dryRun);
     if (result.warnings?.length) {
       for (const w of result.warnings) console.log(chalk.yellow(`\n⚠ ${w}`));
     }
@@ -299,7 +300,7 @@ bulkFullOnCommand.action(
     }
 
     const result = await bulkFullOn(client, ids, names, variant, options.note);
-    printResults(result.data.results, `set to full-on (variant ${variant})`);
+    printResults(result.data.results, `set to full-on (variant ${variant})`, globalOptions.dryRun);
     if (result.warnings?.length) {
       for (const w of result.warnings) console.log(chalk.yellow(`\n⚠ ${w}`));
     }
