@@ -2,11 +2,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { writeFileSync, unlinkSync, existsSync } from 'fs';
 import { join } from 'path';
 import { createCommand } from './create.js';
-import {
-  getAPIClientFromOptions,
-  getGlobalOptions,
-  resolveAPIKey,
-} from '../../lib/utils/api-helper.js';
+import { getAPIClientFromOptions, getGlobalOptions } from '../../lib/utils/api-helper.js';
+import { DryRunError } from '../../api-client/http-client.js';
 import { resetCommand } from '../../test/helpers/command-reset.js';
 
 vi.mock('../../lib/utils/api-helper.js', async (importOriginal) => {
@@ -15,7 +12,6 @@ vi.mock('../../lib/utils/api-helper.js', async (importOriginal) => {
     ...actual,
     getAPIClientFromOptions: vi.fn(),
     getGlobalOptions: vi.fn(),
-    resolveAPIKey: vi.fn(),
   };
 });
 
@@ -40,7 +36,6 @@ describe('create command', () => {
     resetCommand(createCommand);
     vi.mocked(getAPIClientFromOptions).mockResolvedValue(mockClient as any);
     vi.mocked(getGlobalOptions).mockReturnValue({ output: 'table' } as any);
-    vi.mocked(resolveAPIKey).mockResolvedValue('test-api-key');
     consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     processExitSpy = vi.spyOn(process, 'exit').mockImplementation((code?) => {
@@ -424,22 +419,22 @@ config: ${longConfig}
     }
   });
 
-  it('should print payload with --dry-run', async () => {
-    await createCommand.parseAsync(['node', 'test', '--name', 'dry-exp', '--dry-run']);
+  it('lets the global --dry-run short-circuit at the API client (no local flag)', async () => {
+    vi.mocked(getGlobalOptions).mockReturnValue({ output: 'table', dryRun: true } as any);
+    mockClient.createExperiment.mockRejectedValueOnce(new DryRunError('POST', '/experiments'));
 
-    expect(mockClient.createExperiment).not.toHaveBeenCalled();
+    await createCommand.parseAsync(['node', 'test', '--name', 'dry-exp']);
+
+    expect(mockClient.createExperiment).toHaveBeenCalledOnce();
     const output = consoleSpy.mock.calls.flat().join(' ');
-    expect(output).toContain('dry-run');
-    expect(output).toContain('dry-exp');
+    expect(output).toContain('Dry run');
+    expect(processExitSpy).not.toHaveBeenCalled();
   });
 
-  it('should print curl command with --as-curl', async () => {
-    await createCommand.parseAsync(['node', 'test', '--name', 'curl-exp', '--as-curl']);
-
-    expect(mockClient.createExperiment).not.toHaveBeenCalled();
-    const output = consoleSpy.mock.calls.flat().join(' ');
-    expect(output).toContain('curl');
-    expect(output).toContain('curl-exp');
+  it('has no local --dry-run or --as-curl options (superseded by global --dry-run --curl)', () => {
+    const optionNames = createCommand.options.map((o) => o.long);
+    expect(optionNames).not.toContain('--dry-run');
+    expect(optionNames).not.toContain('--as-curl');
   });
 
   it('should print success message with experiment ID', async () => {
