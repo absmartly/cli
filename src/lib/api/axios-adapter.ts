@@ -42,27 +42,23 @@ const NON_IDEMPOTENT_PUT_PATHS = ['/start', '/stop', '/restart', '/development',
 
 // POST endpoints that are read-only computations/lookups, not mutations.
 // These stay reachable under --dry-run since blocking them would break
-// commands like `datasources test`, `events list`, or `estimate-participants`
-// that never write anything.
-const DRY_RUN_SAFE_POST_PATHS = [
-  '/datasources/test',
-  '/datasources/introspect',
-  '/datasources/validate_query',
-  '/datasources/preview_query',
-  '/json_layouts/preview',
-  '/statistics/power/plan/matrix',
-  '/events',
-  '/events/history',
-  '/events/unit_data',
-  '/events/json_values',
-  '/events/json_layouts',
-  '/storage_configs/test',
+// commands like `datasources test` or `events list` that never write anything.
+// Anything not listed here (e.g. estimate-participants) is blocked: fail-safe.
+// Patterns are matched against the URL pathname only (query/fragment stripped)
+// and are anchored, so `/experiments?x=/events` or `/a/b/events` never match.
+const DRY_RUN_SAFE_POST_PATTERNS: RegExp[] = [
+  /^\/datasources\/(test|introspect|validate_query|preview_query)$/,
+  /^\/datasources\/\d+\/json_layouts\/preview$/,
+  /^\/storage_configs\/test$/,
+  /^\/statistics\/power\/plan\/matrix$/,
+  /^\/events(\/(history|unit_data|json_values|json_layouts))?$/,
 ];
 
 function isDryRunSafe(method: string, url: string): boolean {
   if (method === 'GET') return true;
   if (method !== 'POST') return false;
-  return DRY_RUN_SAFE_POST_PATHS.some((suffix) => url.endsWith(suffix));
+  const pathname = url.split(/[?#]/, 1)[0] ?? '';
+  return DRY_RUN_SAFE_POST_PATTERNS.some((re) => re.test(pathname));
 }
 
 const IDEMPOTENT_METHODS = ['GET', 'HEAD', 'OPTIONS', 'PUT', 'DELETE'];
