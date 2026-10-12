@@ -145,7 +145,15 @@ These flags write to **stderr** (so they don't pollute piped stdout) and respect
 
 When stderr is a TTY, JSON bodies and HTTP headers are pretty-printed and syntax-highlighted. Polling loops that fire the same request repeatedly are deduped: each unique request is printed once and a `(N identical requests suppressed)` summary appears when the next distinct request arrives. Responses are always logged so that state transitions during polling stay visible.
 
-`--dry-run` is a global flag that works on any command. It short-circuits the request at the HTTP layer — nothing is sent to the API — and by default behaves as if `--show-request` were also set, so you see exactly what would have gone out. It composes with the other flags (for example `--curl` or `--show-secrets`). Every non-GET request is blocked; read-only POST endpoints (event search, datasource test/introspect/validate/preview, power-analysis matrix, storage-config test) are still sent. `--dry-run` covers API calls only — local actions such as writing config files are not previewed.
+`--dry-run` is a global flag that works on any command. It short-circuits the request at the HTTP layer — nothing is sent to the API — and by default behaves as if `--show-request` were also set, so you see exactly what would have gone out. It composes with the other flags (for example `--curl` or `--show-secrets`). Every non-GET request is blocked; read-only POST endpoints (event search, datasource test/introspect/validate/preview, JSON layout preview, power-analysis matrix, storage-config test) are still sent. `--dry-run` covers API calls only — local actions such as writing config files are not previewed. The request block and a one-line `Dry run: ...` confirmation are both written to **stderr**; stdout stays empty, so pipes (`abs experiments list | abs experiments stop --dry-run | ...`) and `-o json` consumers are safe.
+
+Limits:
+
+- Commands that chain several mutating requests (for example `metrics create --activate`, `metrics create --new-version --activate`, `metrics version --activate`) preview only the **first** request; the follow-up activate call is not shown.
+- `experiments clone --dry-run` still downloads variant screenshots into `./.screenshots/` (a local write).
+- `auth login` refuses `--dry-run` (it would create and delete API keys and store credentials), exiting with `auth login does not support --dry-run`.
+
+Changed: `experiments create --as-curl` was removed — use `--dry-run --curl` instead. Authorization is redacted by default; add `--show-secrets` for a runnable command with the key, e.g. `abs experiments create ... --dry-run --curl --show-secrets 2> cmd.sh`. The per-command `--dry-run` payload dump on stdout was replaced by the HTTP request block plus a one-line confirmation, both on stderr.
 
 Examples:
 
@@ -218,7 +226,7 @@ abs experiments create --name my-experiment --analysis-type fixed_horizon
 abs experiments create --name my-experiment --hypothesis "We believe X"  # custom fields
 abs experiments create --name my-experiment --field "Hypothesis=We believe X"  # generic fallback
 abs experiments create --from-file experiment.md         # from template
-abs experiments create --name my-experiment --dry-run    # preview payload
+abs experiments create --name my-experiment --dry-run    # preview the request (stderr)
 abs experiments create --name my-experiment --dry-run --curl  # preview as curl command
 cat template.md | abs experiments create --from-file -   # from stdin
 
@@ -1505,7 +1513,7 @@ abs experiments get 123 -o template --screenshots-dir ./screenshots      # save 
 
 # Create from template
 abs experiments create --from-file experiment.md
-abs experiments create --from-file experiment.md --dry-run   # preview payload
+abs experiments create --from-file experiment.md --dry-run   # preview the request (stderr)
 cat experiment.md | abs experiments create --from-file -     # from stdin
 
 # Update from template
