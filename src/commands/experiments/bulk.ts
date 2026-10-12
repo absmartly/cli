@@ -27,9 +27,13 @@ async function readStdinIds(): Promise<ExperimentId[]> {
 }
 
 function printResults(results: BulkResult[], actionLabel: string) {
-  const succeeded = results.filter((r) => r.success);
+  const succeeded = results.filter((r) => r.success && !r.dryRun);
+  const dryRun = results.filter((r) => r.dryRun);
   const failed = results.filter((r) => !r.success);
 
+  for (const r of dryRun) {
+    console.log(chalk.blue(`  ○ ${r.name} (${r.id}) — would be ${actionLabel} (dry run)`));
+  }
   for (const r of succeeded) {
     console.log(chalk.green(`  ✓ ${r.name} (${r.id}) — ${actionLabel}`));
   }
@@ -39,7 +43,7 @@ function printResults(results: BulkResult[], actionLabel: string) {
 
   console.log('');
   console.log(
-    `${chalk.bold('Results:')} ${succeeded.length} succeeded, ${failed.length} failed out of ${results.length}`
+    `${chalk.bold('Results:')} ${succeeded.length + dryRun.length} succeeded, ${failed.length} failed out of ${results.length}`
   );
   if (failed.length > 0) process.exitCode = 1;
 }
@@ -56,7 +60,6 @@ function showSummary(ids: ExperimentId[], names: Map<ExperimentId, string>, acti
 interface BulkOptions {
   note?: string;
   stdin?: boolean;
-  dryRun?: boolean;
   state?: string;
   app?: string;
   yes?: boolean;
@@ -66,7 +69,6 @@ function addSharedOptions(cmd: Command): Command {
   return cmd
     .option('--note <text>', 'activity log note')
     .option('--stdin', 'read experiment IDs from stdin (one per line)')
-    .option('--dry-run', 'show what would happen without executing')
     .option('--state <state>', 'filter experiments by state')
     .option('--app <name>', 'filter experiments by application')
     .option('--yes', 'skip confirmation prompt');
@@ -94,12 +96,7 @@ bulkStartCommand.action(
     const names = await fetchBulkNames(client, ids);
     showSummary(ids, names, 'start');
 
-    if (options.dryRun) {
-      console.log(chalk.blue('Dry run — no changes made.'));
-      return;
-    }
-
-    if (!options.yes) {
+    if (!globalOptions.dryRun && !options.yes) {
       const proceed = await confirm({
         message: `Start ${ids.length} experiment(s)?`,
         default: false,
@@ -152,12 +149,7 @@ bulkStopCommand.action(
         choices: VALID_STOP_REASONS.map((r) => ({ value: r, name: r.replace(/_/g, ' ') })),
       }));
 
-    if (options.dryRun) {
-      console.log(chalk.blue(`Dry run — would stop with reason: ${reason}`));
-      return;
-    }
-
-    if (!options.yes) {
+    if (!globalOptions.dryRun && !options.yes) {
       const proceed = await confirm({
         message: `Stop ${ids.length} experiment(s) (reason: ${reason})?`,
         default: false,
@@ -195,12 +187,7 @@ bulkArchiveCommand.action(
     const names = await fetchBulkNames(client, ids);
     showSummary(ids, names, 'archive');
 
-    if (options.dryRun) {
-      console.log(chalk.blue('Dry run — no changes made.'));
-      return;
-    }
-
-    if (!options.yes) {
+    if (!globalOptions.dryRun && !options.yes) {
       const proceed = await confirm({
         message: `Archive ${ids.length} experiment(s)?`,
         default: false,
@@ -239,12 +226,7 @@ bulkDevelopmentCommand.action(
     const names = await fetchBulkNames(client, ids);
     showSummary(ids, names, 'development');
 
-    if (options.dryRun) {
-      console.log(chalk.blue('Dry run — no changes made.'));
-      return;
-    }
-
-    if (!options.yes) {
+    if (!globalOptions.dryRun && !options.yes) {
       const proceed = await confirm({
         message: `Set ${ids.length} experiment(s) to development?`,
         default: false,
@@ -296,12 +278,7 @@ bulkFullOnCommand.action(
         choices: [1, 2, 3, 4, 5].map((n) => ({ value: n, name: `Variant ${n}` })),
       }));
 
-    if (options.dryRun) {
-      console.log(chalk.blue(`Dry run — would set full-on to variant ${variant}`));
-      return;
-    }
-
-    if (!options.yes) {
+    if (!globalOptions.dryRun && !options.yes) {
       const proceed = await confirm({
         message: `Set ${ids.length} experiment(s) to full-on (variant ${variant})?`,
         default: false,
