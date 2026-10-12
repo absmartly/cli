@@ -138,15 +138,20 @@ These flags write to **stderr** (so they don't pollute piped stdout) and respect
 | `--show-request` | Print outgoing HTTP requests as a readable HTTP-style block. |
 | `--show-response` | Print HTTP responses (success and error) as an HTTP-style block. |
 | `--curl` | Print outgoing requests as runnable curl commands. |
+| `--dry-run` | Preview the request without sending it. Implies `--show-request` unless `--curl` is set. |
 | `--show-secrets` | Don't redact `Authorization` / `Set-Cookie` / sensitive body fields. Use with care. |
 | `--headers-only` | Omit request and response bodies from `--show-request` / `--show-response` / `--curl` output. |
 | `--status-only` | Print only the response status line, e.g. `← 200 OK (175ms)`. Implies `--show-response`. |
 
 When stderr is a TTY, JSON bodies and HTTP headers are pretty-printed and syntax-highlighted. Polling loops that fire the same request repeatedly are deduped: each unique request is printed once and a `(N identical requests suppressed)` summary appears when the next distinct request arrives. Responses are always logged so that state transitions during polling stay visible.
 
+`--dry-run` is a global flag that works on any command. It short-circuits the request at the HTTP layer — nothing is sent to the API — and by default behaves as if `--show-request` were also set, so you see exactly what would have gone out. It composes with the other flags (for example `--curl` or `--show-secrets`). Every non-GET request is blocked; read-only POST endpoints (event search, datasource test/introspect/validate/preview, power-analysis matrix, storage-config test) are still sent. `--dry-run` covers API calls only — local actions such as writing config files are not previewed.
+
 Examples:
 
 ```bash
+abs experiments stop 1816 --reason other --dry-run     # preview the PUT, nothing sent
+abs experiments create --name x --dry-run --curl       # preview as a runnable curl command
 abs experiments get 1816 --show-request --show-response
 abs experiments list --curl                            # paste-runnable curl
 abs experiments get 1816 --show-response --status-only # just `← 200 OK (...)`
@@ -214,7 +219,7 @@ abs experiments create --name my-experiment --hypothesis "We believe X"  # custo
 abs experiments create --name my-experiment --field "Hypothesis=We believe X"  # generic fallback
 abs experiments create --from-file experiment.md         # from template
 abs experiments create --name my-experiment --dry-run    # preview payload
-abs experiments create --name my-experiment --as-curl    # output as curl command
+abs experiments create --name my-experiment --dry-run --curl  # preview as curl command
 cat template.md | abs experiments create --from-file -   # from stdin
 
 # Clone an experiment
@@ -356,6 +361,7 @@ abs experiments bulk archive 123 456 --yes
 abs experiments bulk full-on 123 --variant 1 --note "Winner confirmed"
 abs experiments bulk development 123 456 --note "Moving to dev"
 abs experiments bulk stop --state running --app my-app --note "Maintenance"
+abs experiments bulk stop 123 456 --reason other --dry-run   # preview every PUT, nothing sent
 
 # Unix pipe composition
 # List outputs IDs when piped; action commands read IDs from stdin and pass them through
