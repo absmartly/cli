@@ -2,7 +2,7 @@ import type { APIClient } from '../../api-client/api-client.js';
 import type { CommandResult } from '../types.js';
 import type { ExperimentId } from '../../lib/api/branded-types.js';
 import { parseExperimentId } from '../../lib/utils/validators.js';
-import { APIError } from '../../api-client/http-client.js';
+import { APIError, DryRunError } from '../../api-client/http-client.js';
 
 const FATAL_STATUS_CODES = new Set([401, 403, 429]);
 
@@ -26,6 +26,7 @@ export interface BulkResult {
   id: ExperimentId;
   name: string;
   success: boolean;
+  dryRun?: boolean;
   error?: string;
 }
 
@@ -118,6 +119,11 @@ export async function runBulkOperation(
         await action(id);
         results.push({ id, name, success: true });
       } catch (err) {
+        if (err instanceof DryRunError) {
+          results.push({ id, name, success: true, dryRun: true });
+          continue;
+        }
+
         const statusCode = err instanceof APIError ? err.statusCode : undefined;
 
         if (statusCode !== undefined && FATAL_STATUS_CODES.has(statusCode)) {
