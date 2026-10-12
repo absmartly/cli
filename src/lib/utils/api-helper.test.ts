@@ -19,6 +19,7 @@ vi.mock('../output/formatter', () => ({
   formatOutput: vi.fn((data) => JSON.stringify(data)),
 }));
 
+import { DryRunError } from '../../api-client/http-client.js';
 import {
   getAPIClientFromOptions,
   getGlobalOptions,
@@ -705,6 +706,24 @@ describe('API Helper', () => {
       expect(fn).toHaveBeenCalled();
       expect(consoleErrorSpy).not.toHaveBeenCalled();
       expect(processExitSpy).not.toHaveBeenCalled();
+    });
+
+    it('prints a dry-run confirmation and does not exit(1) for DryRunError', async () => {
+      const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      try {
+        const wrapped = withErrorHandling(async () => {
+          throw new DryRunError('PUT', '/experiments/1/stop');
+        });
+
+        await wrapped();
+
+        expect(processExitSpy).not.toHaveBeenCalled();
+        expect(consoleErrorSpy).not.toHaveBeenCalled();
+        expect(consoleLogSpy).toHaveBeenCalledTimes(1);
+        expect(String(consoleLogSpy.mock.calls[0]?.[0])).toContain('PUT /experiments/1/stop');
+      } finally {
+        consoleLogSpy.mockRestore();
+      }
     });
   });
 

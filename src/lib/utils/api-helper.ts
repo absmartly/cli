@@ -4,6 +4,7 @@ import { getAPIKey, getOAuthToken } from '../config/keyring.js';
 import type { AuthConfig } from '../api/axios-adapter.js';
 import { Command } from 'commander';
 import chalk from 'chalk';
+import { DryRunError } from '../../api-client/http-client.js';
 import { formatOutput, type OutputFormat } from '../output/formatter.js';
 import { projectFields } from '../output/project-fields.js';
 import { isStdoutPiped } from './stdin.js';
@@ -320,6 +321,10 @@ export function withErrorHandling<TArgs extends unknown[]>(
     try {
       await fn(...args);
     } catch (error) {
+      if (error instanceof DryRunError) {
+        console.log(chalk.blue(error.message));
+        return;
+      }
       handleCommandError(error);
     }
   };
