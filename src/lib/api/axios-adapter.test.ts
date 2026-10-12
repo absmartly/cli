@@ -284,6 +284,31 @@ describe('AxiosHttpClient request/response logging', () => {
       expect(networkHit).toBe(false);
     });
 
+    it.each([
+      '/experiments?x=/events',
+      '/experiments/1/foo/events',
+      '/datasources/123/json_layouts/create',
+      '/experiments#/events',
+    ])('blocks POST %s (allowlist is anchored on the pathname)', async (url) => {
+      const client = new AxiosHttpClient(BASE_URL, 'secret-key', { dryRun: true });
+      await expect(client.request({ method: 'POST', url, data: {} })).rejects.toMatchObject({
+        name: 'DryRunError',
+        method: 'POST',
+        url,
+      });
+    });
+
+    it.each(['/events?take=10', '/statistics/power/plan/matrix', '/events/history'])(
+      'allows POST %s',
+      async (url) => {
+        const path = url.split('?')[0];
+        mswServer.use(http.post(`${BASE_URL}${path}`, () => HttpResponse.json({ ok: true })));
+        const client = new AxiosHttpClient(BASE_URL, 'secret-key', { dryRun: true });
+        const response = await client.request({ method: 'POST', url, data: {} });
+        expect(response.status).toBe(200);
+      }
+    );
+
     it('still logs the request via --show-request before rejecting', async () => {
       const stderr = captureStderr();
       try {
