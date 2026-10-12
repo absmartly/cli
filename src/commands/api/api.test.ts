@@ -93,8 +93,8 @@ describe('api command', () => {
 
     expect(mockClient.rawRequest).toHaveBeenCalledWith('/experiments', 'POST', { name: 'x' }, {});
     expect(processExitSpy).not.toHaveBeenCalled();
-    const output = consoleSpy.mock.calls.flat().join(' ');
-    expect(output).toContain('Dry run');
+    expect(consoleErrorSpy.mock.calls.flat().join(' ')).toContain('Dry run');
+    expect(consoleSpy).not.toHaveBeenCalled();
   });
 
   it('should reject invalid JSON in --data', async () => {

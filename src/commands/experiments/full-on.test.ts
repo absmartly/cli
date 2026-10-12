@@ -110,10 +110,10 @@ describe('full-on command', () => {
 
       await fullOnCommand.parseAsync(['node', 'test', '42', '--variant', '1']);
 
-      expect(consoleErrorSpy).not.toHaveBeenCalled();
-      const output = consoleSpy.mock.calls.flat().join(' ');
+      const output = consoleErrorSpy.mock.calls.flat().join(' ');
       expect(output).toContain('Experiment 42');
       expect(output).toContain('Dry run: PUT /experiments/42/full_on');
+      expect(consoleSpy).not.toHaveBeenCalled();
       expect(process.exitCode).not.toBe(1);
     } finally {
       process.exitCode = saved;

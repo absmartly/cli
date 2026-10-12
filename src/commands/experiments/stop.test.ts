@@ -71,10 +71,10 @@ describe('stop command', () => {
 
       await stopCommand.parseAsync(['node', 'test', '42', '--reason', 'other']);
 
-      expect(consoleErrorSpy).not.toHaveBeenCalled();
-      const output = consoleSpy.mock.calls.flat().join(' ');
+      const output = consoleErrorSpy.mock.calls.flat().join(' ');
       expect(output).toContain('Experiment 42');
       expect(output).toContain('Dry run: PUT /experiments/42/stop');
+      expect(consoleSpy).not.toHaveBeenCalled();
       expect(process.exitCode).not.toBe(1);
     } finally {
       process.exitCode = saved;

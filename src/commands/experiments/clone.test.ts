@@ -128,8 +128,9 @@ describe('clone command', () => {
     await cloneCommand.parseAsync(['node', 'test', '100', '--name', 'my_clone']);
 
     expect(mockClient.createExperiment).toHaveBeenCalledOnce();
-    const output = consoleSpy.mock.calls.flat().join(' ');
+    const output = consoleErrorSpy.mock.calls.flat().join(' ');
     expect(output).toContain('Dry run');
+    expect(consoleSpy.mock.calls.flat().join(' ')).not.toContain('Dry run');
   });
 
   it('has no local --dry-run option (superseded by global --dry-run)', () => {

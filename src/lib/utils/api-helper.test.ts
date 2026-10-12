@@ -708,8 +708,10 @@ describe('API Helper', () => {
       expect(processExitSpy).not.toHaveBeenCalled();
     });
 
-    it('prints a dry-run confirmation and does not exit(1) for DryRunError', async () => {
+    it('prints the dry-run confirmation to stderr, leaves stdout empty, and does not exit(1)', async () => {
       const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const savedExitCode = process.exitCode;
+      process.exitCode = undefined;
       try {
         const wrapped = withErrorHandling(async () => {
           throw new DryRunError('PUT', '/experiments/1/stop');
@@ -718,10 +720,31 @@ describe('API Helper', () => {
         await wrapped();
 
         expect(processExitSpy).not.toHaveBeenCalled();
-        expect(consoleErrorSpy).not.toHaveBeenCalled();
-        expect(consoleLogSpy).toHaveBeenCalledTimes(1);
-        expect(String(consoleLogSpy.mock.calls[0]?.[0])).toContain('PUT /experiments/1/stop');
+        expect(process.exitCode).not.toBe(1);
+        expect(consoleErrorSpy).toHaveBeenCalledTimes(1);
+        expect(String(consoleErrorSpy.mock.calls[0]?.[0])).toContain('PUT /experiments/1/stop');
+        expect(consoleLogSpy).not.toHaveBeenCalled();
       } finally {
+        process.exitCode = savedExitCode;
+        consoleLogSpy.mockRestore();
+      }
+    });
+
+    it('keeps stdout empty for a DryRunError even with an explicit -o json', async () => {
+      const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+      try {
+        const wrapped = withErrorHandling(async () => {
+          throw new DryRunError('POST', '/experiments');
+        });
+
+        await wrapped();
+
+        expect(consoleLogSpy).not.toHaveBeenCalled();
+        expect(writeSpy).not.toHaveBeenCalled();
+        expect(String(consoleErrorSpy.mock.calls[0]?.[0])).toContain('POST /experiments');
+      } finally {
+        writeSpy.mockRestore();
         consoleLogSpy.mockRestore();
       }
     });

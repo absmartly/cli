@@ -347,8 +347,9 @@ describe('restart command', () => {
 
       await restartCommand.parseAsync(['node', 'test', '42']);
 
-      const output = consoleSpy.mock.calls.flat().join(' ');
+      const output = consoleErrorSpy.mock.calls.flat().join(' ');
       expect(output).toContain('Dry run');
+      expect(consoleSpy.mock.calls.flat().join(' ')).not.toContain('Dry run');
       expect(restartHit).toBe(false);
       expect(processExitSpy).not.toHaveBeenCalled();
     }
