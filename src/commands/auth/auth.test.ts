@@ -7,6 +7,8 @@ import {
   getGlobalOptions,
   printFormatted,
 } from '../../lib/utils/api-helper.js';
+import { createAPIClient } from '../../lib/api/client.js';
+import { startOAuthFlow } from '../../lib/auth/oauth.js';
 import { resetCommand } from '../../test/helpers/command-reset.js';
 
 vi.mock('../../lib/config/config.js');
@@ -230,6 +232,7 @@ describe('auth login command', () => {
     resetCommand(authCommand);
     vi.mocked(keyring.setAPIKey).mockResolvedValue(undefined);
     vi.mocked(config.setProfile).mockImplementation(() => {});
+    vi.mocked(getGlobalOptions).mockReturnValue({ output: 'table', dryRun: false } as any);
     consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     processExitSpy = vi.spyOn(process, 'exit').mockImplementation((code?) => {
@@ -241,6 +244,24 @@ describe('auth login command', () => {
     consoleSpy.mockRestore();
     consoleErrorSpy.mockRestore();
     processExitSpy.mockRestore();
+  });
+
+  it.each([
+    ['--api-key flow', ['--api-key', 'k', '--endpoint', 'https://api.example.com/v1']],
+    ['OAuth flow', ['--endpoint', 'https://api.example.com/v1', '--oauth', '--persistent']],
+  ])('refuses --dry-run before any network call or keyring write (%s)', async (_n, args) => {
+    vi.mocked(getGlobalOptions).mockReturnValue({ output: 'table', dryRun: true } as any);
+
+    await expect(authCommand.parseAsync(['node', 'test', 'login', ...args])).rejects.toThrow(
+      'process.exit: 1'
+    );
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith('Error:', 'auth login does not support --dry-run');
+    expect(createAPIClient).not.toHaveBeenCalled();
+    expect(startOAuthFlow).not.toHaveBeenCalled();
+    expect(keyring.setAPIKey).not.toHaveBeenCalled();
+    expect(keyring.setOAuthToken).not.toHaveBeenCalled();
+    expect(config.setProfile).not.toHaveBeenCalled();
   });
 
   it('should store credentials when --api-key and --endpoint are provided', async () => {
