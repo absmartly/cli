@@ -322,7 +322,7 @@ export function withErrorHandling<TArgs extends unknown[]>(
       await fn(...args);
     } catch (error) {
       if (error instanceof DryRunError) {
-        console.log(chalk.blue(error.message));
+        console.error(chalk.blue(error.message));
         return;
       }
       handleCommandError(error);

@@ -426,8 +426,9 @@ config: ${longConfig}
     await createCommand.parseAsync(['node', 'test', '--name', 'dry-exp']);
 
     expect(mockClient.createExperiment).toHaveBeenCalledOnce();
-    const output = consoleSpy.mock.calls.flat().join(' ');
+    const output = consoleErrorSpy.mock.calls.flat().join(' ');
     expect(output).toContain('Dry run');
+    expect(consoleSpy.mock.calls.flat().join(' ')).not.toContain('Dry run');
     expect(processExitSpy).not.toHaveBeenCalled();
   });
 

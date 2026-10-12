@@ -46,7 +46,7 @@ export const startCommand = new Command('start')
           printResult(globalOptions, { message: `✓ Experiment ${id} started`, id });
         } catch (e) {
           if (e instanceof DryRunError) {
-            console.log(chalk.blue(`○ Experiment ${idStr}: ${e.message}`));
+            console.error(chalk.blue(`○ Experiment ${idStr}: ${e.message}`));
             continue;
           }
           hasFailures = true;

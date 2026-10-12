@@ -327,8 +327,9 @@ describe('update command', () => {
     await updateCommand.parseAsync(['node', 'test', '42', '--display-name', 'Test']);
 
     expect(mockClient.updateExperiment).toHaveBeenCalledOnce();
-    const output = consoleSpy.mock.calls.flat().join(' ');
+    const output = consoleErrorSpy.mock.calls.flat().join(' ');
     expect(output).toContain('Dry run');
+    expect(consoleSpy.mock.calls.flat().join(' ')).not.toContain('Dry run');
   });
 
   it('has no local --dry-run option (superseded by global --dry-run)', () => {

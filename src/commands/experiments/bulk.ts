@@ -32,7 +32,7 @@ function printResults(results: BulkResult[], actionLabel: string) {
   const failed = results.filter((r) => !r.success);
 
   for (const r of dryRun) {
-    console.log(chalk.blue(`  ○ ${r.name} (${r.id}) — would be ${actionLabel} (dry run)`));
+    console.error(chalk.blue(`  ○ ${r.name} (${r.id}) — would be ${actionLabel} (dry run)`));
   }
   for (const r of succeeded) {
     console.log(chalk.green(`  ✓ ${r.name} (${r.id}) — ${actionLabel}`));
@@ -41,20 +41,32 @@ function printResults(results: BulkResult[], actionLabel: string) {
     console.log(chalk.red(`  ✗ ${r.name} (${r.id}) — ${r.error}`));
   }
 
-  console.log('');
-  console.log(
-    `${chalk.bold('Results:')} ${succeeded.length + dryRun.length} succeeded, ${failed.length} failed out of ${results.length}`
-  );
+  const parts: string[] = [];
+  if (succeeded.length > 0 || dryRun.length === 0) parts.push(`${succeeded.length} succeeded`);
+  if (dryRun.length > 0) parts.push(`${dryRun.length} previewed (dry run)`);
+  parts.push(`${failed.length} failed`);
+  const summary = `${chalk.bold('Results:')} ${parts.join(', ')} out of ${results.length}`;
+  // A run made only of dry-run previews has nothing for stdout: keep it clean.
+  const log = results.length > 0 && dryRun.length === results.length ? console.error : console.log;
+  log('');
+  log(summary);
   if (failed.length > 0) process.exitCode = 1;
 }
 
-function showSummary(ids: ExperimentId[], names: Map<ExperimentId, string>, actionLabel: string) {
-  console.log(chalk.bold(`\nBulk ${actionLabel} — ${ids.length} experiment(s):\n`));
+function showSummary(
+  ids: ExperimentId[],
+  names: Map<ExperimentId, string>,
+  actionLabel: string,
+  dryRun = false
+) {
+  // Under --dry-run the whole report is a preview, so it goes to stderr.
+  const log = dryRun ? console.error : console.log;
+  log(chalk.bold(`\nBulk ${actionLabel} — ${ids.length} experiment(s):\n`));
   for (const id of ids) {
     const name = names.get(id) ?? `#${id}`;
-    console.log(`  - ${name} (${id})`);
+    log(`  - ${name} (${id})`);
   }
-  console.log('');
+  log('');
 }
 
 interface BulkOptions {
@@ -94,7 +106,7 @@ bulkStartCommand.action(
     }
 
     const names = await fetchBulkNames(client, ids);
-    showSummary(ids, names, 'start');
+    showSummary(ids, names, 'start', globalOptions.dryRun);
 
     if (!globalOptions.dryRun && !options.yes) {
       const proceed = await confirm({
@@ -133,7 +145,7 @@ bulkStopCommand.action(
     }
 
     const names = await fetchBulkNames(client, ids);
-    showSummary(ids, names, 'stop');
+    showSummary(ids, names, 'stop', globalOptions.dryRun);
 
     if (options.reason && !(VALID_STOP_REASONS as readonly string[]).includes(options.reason)) {
       throw new Error(
@@ -185,7 +197,7 @@ bulkArchiveCommand.action(
     }
 
     const names = await fetchBulkNames(client, ids);
-    showSummary(ids, names, 'archive');
+    showSummary(ids, names, 'archive', globalOptions.dryRun);
 
     if (!globalOptions.dryRun && !options.yes) {
       const proceed = await confirm({
@@ -224,7 +236,7 @@ bulkDevelopmentCommand.action(
     }
 
     const names = await fetchBulkNames(client, ids);
-    showSummary(ids, names, 'development');
+    showSummary(ids, names, 'development', globalOptions.dryRun);
 
     if (!globalOptions.dryRun && !options.yes) {
       const proceed = await confirm({
@@ -269,7 +281,7 @@ bulkFullOnCommand.action(
     }
 
     const names = await fetchBulkNames(client, ids);
-    showSummary(ids, names, 'full-on');
+    showSummary(ids, names, 'full-on', globalOptions.dryRun);
 
     const variant =
       options.variant ??

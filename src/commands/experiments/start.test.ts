@@ -68,10 +68,10 @@ describe('start command', () => {
 
       await startCommand.parseAsync(['node', 'test', '42']);
 
-      expect(consoleErrorSpy).not.toHaveBeenCalled();
-      const output = consoleSpy.mock.calls.flat().join(' ');
+      const output = consoleErrorSpy.mock.calls.flat().join(' ');
       expect(output).toContain('Experiment 42');
       expect(output).toContain('Dry run: PUT /experiments/42/start');
+      expect(consoleSpy).not.toHaveBeenCalled();
       expect(process.exitCode).not.toBe(1);
     } finally {
       process.exitCode = saved;
@@ -89,7 +89,7 @@ describe('start command', () => {
 
       await startCommand.parseAsync(['node', 'test', '42', '--pass-through']);
 
-      expect(consoleErrorSpy).not.toHaveBeenCalled();
+      expect(consoleErrorSpy.mock.calls.flat().join(' ')).toContain('Dry run');
       expect(consoleSpy.mock.calls.some((call) => call[0] === '42')).toBe(false);
       expect(process.exitCode).not.toBe(1);
     } finally {

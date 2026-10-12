@@ -72,10 +72,10 @@ describe('archive command', () => {
 
       await archiveCommand.parseAsync(['node', 'test', '42']);
 
-      expect(consoleErrorSpy).not.toHaveBeenCalled();
-      const output = consoleSpy.mock.calls.flat().join(' ');
+      const output = consoleErrorSpy.mock.calls.flat().join(' ');
       expect(output).toContain('Experiment 42');
       expect(output).toContain('Dry run: PUT /experiments/42/archive');
+      expect(consoleSpy).not.toHaveBeenCalled();
       expect(process.exitCode).not.toBe(1);
     } finally {
       process.exitCode = saved;

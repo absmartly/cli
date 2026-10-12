@@ -50,7 +50,7 @@ export const developmentCommand = new Command('development')
           });
         } catch (e) {
           if (e instanceof DryRunError) {
-            console.log(chalk.blue(`○ Experiment ${idStr}: ${e.message}`));
+            console.error(chalk.blue(`○ Experiment ${idStr}: ${e.message}`));
             continue;
           }
           hasFailures = true;
