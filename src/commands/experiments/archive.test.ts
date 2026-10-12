@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Readable } from 'stream';
 import { archiveCommand } from './archive.js';
 import { getAPIClientFromOptions, getGlobalOptions } from '../../lib/utils/api-helper.js';
+import { DryRunError } from '../../api-client/http-client.js';
 import { resetCommand } from '../../test/helpers/command-reset.js';
 import { setTTYOverride } from '../../lib/utils/stdin.js';
 
@@ -59,6 +60,26 @@ describe('archive command', () => {
     await archiveCommand.parseAsync(['node', 'test', '42', '--note', 'my note']);
 
     expect(mockClient.archiveExperiment).toHaveBeenCalledWith(42, undefined, 'my note');
+  });
+
+  it('treats DryRunError as a preview, not a failure', async () => {
+    const saved = process.exitCode;
+    process.exitCode = undefined;
+    try {
+      mockClient.archiveExperiment.mockRejectedValueOnce(
+        new DryRunError('PUT', '/experiments/42/archive')
+      );
+
+      await archiveCommand.parseAsync(['node', 'test', '42']);
+
+      expect(consoleErrorSpy).not.toHaveBeenCalled();
+      const output = consoleSpy.mock.calls.flat().join(' ');
+      expect(output).toContain('Experiment 42');
+      expect(output).toContain('Dry run: PUT /experiments/42/archive');
+      expect(process.exitCode).not.toBe(1);
+    } finally {
+      process.exitCode = saved;
+    }
   });
 
   describe('stdin pipe support', () => {
