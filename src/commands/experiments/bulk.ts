@@ -31,7 +31,6 @@ function printResults(results: BulkResult[], actionLabel: string, isDryRun = fal
   const dryRun = results.filter((r) => r.dryRun);
   const failed = results.filter((r) => !r.success);
 
-  // Under --dry-run the whole report is a preview, so none of it goes to stdout.
   const log = isDryRun ? console.error : console.log;
 
   for (const r of dryRun) {
@@ -60,7 +59,6 @@ function showSummary(
   actionLabel: string,
   dryRun = false
 ) {
-  // Under --dry-run the whole report is a preview, so it goes to stderr.
   const log = dryRun ? console.error : console.log;
   log(chalk.bold(`\nBulk ${actionLabel} — ${ids.length} experiment(s):\n`));
   for (const id of ids) {
