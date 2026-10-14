@@ -329,6 +329,48 @@ describe('AxiosHttpClient request/response logging', () => {
       }
     });
 
+    it('redacts sensitive query values in the dry-run error unless showSecrets is set', async () => {
+      const client = new AxiosHttpClient(BASE_URL, 'secret-key', { dryRun: true });
+
+      const err = await client
+        .request({ method: 'DELETE', url: '/experiments/42?access_token=REVIEW_SENTINEL' })
+        .catch((e: unknown) => e);
+
+      expect(err).toMatchObject({ name: 'DryRunError', method: 'DELETE' });
+      const { message, url } = err as { message: string; url: string };
+      expect(message).not.toContain('REVIEW_SENTINEL');
+      expect(url).not.toContain('REVIEW_SENTINEL');
+      expect(message).toContain('/experiments/42');
+    });
+
+    it('keeps the full URL in the dry-run error when showSecrets is set', async () => {
+      const client = new AxiosHttpClient(BASE_URL, 'secret-key', {
+        dryRun: true,
+        showSecrets: true,
+      });
+
+      await expect(
+        client.request({ method: 'DELETE', url: '/experiments/42?access_token=REVIEW_SENTINEL' })
+      ).rejects.toMatchObject({
+        message: expect.stringContaining('access_token=REVIEW_SENTINEL'),
+      });
+    });
+
+    it('still classifies on the raw URL: a sensitive query on a read-only POST path is allowed', async () => {
+      mswServer.use(
+        http.post(`${BASE_URL}/events`, () => HttpResponse.json({ events: [] }, { status: 200 }))
+      );
+      const client = new AxiosHttpClient(BASE_URL, 'secret-key', { dryRun: true });
+
+      const response = await client.request({
+        method: 'POST',
+        url: '/events?access_token=REVIEW_SENTINEL',
+        data: {},
+      });
+
+      expect(response.status).toBe(200);
+    });
+
     it('does not print a "non-HTTP error" line under --show-response', async () => {
       const stderr = captureStderr();
       try {

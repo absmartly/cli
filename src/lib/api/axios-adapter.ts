@@ -12,6 +12,7 @@ import {
   formatGenericError,
   formatSuppressionNotice,
   safeStringify,
+  redactUrl,
   type FormatOptions,
 } from './request-logger.js';
 
@@ -211,7 +212,9 @@ export class AxiosHttpClient implements HttpClient {
         const method = (config.method ?? 'GET').toUpperCase();
         const url = config.url ?? '';
         if (!isDryRunSafe(method, url)) {
-          return Promise.reject(new DryRunError(method, url));
+          return Promise.reject(
+            new DryRunError(method, redactUrl(url, this.formatOpts.showSecrets))
+          );
         }
         return config;
       });
