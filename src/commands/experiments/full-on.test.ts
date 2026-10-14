@@ -5,6 +5,7 @@ import { createAPIClient } from '../../lib/api/client.js';
 import { isLiveMode, TEST_BASE_URL, TEST_API_KEY } from '../../test/helpers/test-config.js';
 import { fullOnCommand } from './full-on.js';
 import { getAPIClientFromOptions, getGlobalOptions } from '../../lib/utils/api-helper.js';
+import { DryRunError } from '../../api-client/http-client.js';
 import { resetCommand } from '../../test/helpers/command-reset.js';
 
 vi.mock('../../lib/utils/api-helper.js', async (importOriginal) => {
@@ -97,6 +98,26 @@ describe('full-on command', () => {
     await fullOnCommand.parseAsync(['node', 'test', '42', '--variant', '1', '--note', 'My note']);
 
     expect(mockClient.fullOnExperiment).toHaveBeenCalledWith(42, 1, 'My note');
+  });
+
+  it('treats DryRunError as a preview, not a failure', async () => {
+    const saved = process.exitCode;
+    process.exitCode = undefined;
+    try {
+      mockClient.fullOnExperiment.mockRejectedValueOnce(
+        new DryRunError('PUT', '/experiments/42/full_on')
+      );
+
+      await fullOnCommand.parseAsync(['node', 'test', '42', '--variant', '1']);
+
+      const output = consoleErrorSpy.mock.calls.flat().join(' ');
+      expect(output).toContain('Experiment 42');
+      expect(output).toContain('Dry run: PUT /experiments/42/full_on');
+      expect(consoleSpy).not.toHaveBeenCalled();
+      expect(process.exitCode).not.toBe(1);
+    } finally {
+      process.exitCode = saved;
+    }
   });
 
   it('should reject --variant 0', async () => {

@@ -2,7 +2,7 @@ import axios, { AxiosInstance, AxiosError } from 'axios';
 import https from 'https';
 import axiosRetry from 'axios-retry';
 import { version } from '../utils/version.js';
-import { APIError } from '../../api-client/http-client.js';
+import { APIError, DryRunError } from '../../api-client/http-client.js';
 import type { HttpClient, HttpRequestConfig, HttpResponse } from '../../api-client/http-client.js';
 import {
   formatRequestHTTP,
@@ -12,6 +12,7 @@ import {
   formatGenericError,
   formatSuppressionNotice,
   safeStringify,
+  redactUrl,
   type FormatOptions,
 } from './request-logger.js';
 
@@ -32,12 +33,34 @@ export interface AxiosHttpClientOptions {
   headersOnly?: boolean;
   statusOnly?: boolean;
   noColor?: boolean;
+  dryRun?: boolean;
 }
 
 const DEFAULT_TIMEOUT = 30000;
 const RETRY_COUNT = 3;
 
 const NON_IDEMPOTENT_PUT_PATHS = ['/start', '/stop', '/restart', '/development', '/full_on'];
+
+// POST endpoints that are read-only computations/lookups, not mutations.
+// These stay reachable under --dry-run since blocking them would break
+// commands like `datasources test` or `events list` that never write anything.
+// Anything not listed here (e.g. estimate-participants) is blocked: fail-safe.
+// Patterns are matched against the URL pathname only (query/fragment stripped)
+// and are anchored, so `/experiments?x=/events` or `/a/b/events` never match.
+const DRY_RUN_SAFE_POST_PATTERNS: RegExp[] = [
+  /^\/datasources\/(test|introspect|validate_query|preview_query)$/,
+  /^\/datasources\/\d+\/json_layouts\/preview$/,
+  /^\/storage_configs\/test$/,
+  /^\/statistics\/power\/plan\/matrix$/,
+  /^\/events(\/(history|unit_data|json_values|json_layouts))?$/,
+];
+
+function isDryRunSafe(method: string, url: string): boolean {
+  if (method === 'GET') return true;
+  if (method !== 'POST') return false;
+  const pathname = url.split(/[?#]/, 1)[0] ?? '';
+  return DRY_RUN_SAFE_POST_PATTERNS.some((re) => re.test(pathname));
+}
 
 const IDEMPOTENT_METHODS = ['GET', 'HEAD', 'OPTIONS', 'PUT', 'DELETE'];
 
@@ -121,6 +144,7 @@ export class AxiosHttpClient implements HttpClient {
   private readonly showRequest: boolean;
   private readonly showResponse: boolean;
   private readonly curl: boolean;
+  private readonly dryRun: boolean;
   private readonly formatOpts: FormatOptions;
   private seenFingerprints: Set<string> = new Set();
   private suppressedCount = 0;
@@ -131,6 +155,7 @@ export class AxiosHttpClient implements HttpClient {
     this.showRequest = options.showRequest ?? false;
     this.showResponse = options.showResponse ?? false;
     this.curl = options.curl ?? false;
+    this.dryRun = options.dryRun ?? false;
     this.formatOpts = {
       showSecrets: options.showSecrets ?? false,
       omitBody: options.headersOnly ?? false,
@@ -178,6 +203,22 @@ export class AxiosHttpClient implements HttpClient {
         return (error.response?.status ?? 0) >= 500;
       },
     });
+
+    // Registered first on purpose: axios runs request interceptors in reverse
+    // registration order, so the logging interceptors below run before this
+    // one and --show-request/--curl still print the request that gets blocked.
+    if (this.dryRun) {
+      this.client.interceptors.request.use((config) => {
+        const method = (config.method ?? 'GET').toUpperCase();
+        const url = config.url ?? '';
+        if (!isDryRunSafe(method, url)) {
+          return Promise.reject(
+            new DryRunError(method, redactUrl(url, this.formatOpts.showSecrets))
+          );
+        }
+        return config;
+      });
+    }
 
     if (this.verbose) {
       this.client.interceptors.request.use((config) => {
@@ -240,6 +281,7 @@ export class AxiosHttpClient implements HttpClient {
           return response;
         },
         (error: unknown) => {
+          if (error instanceof DryRunError) return Promise.reject(error);
           if (axios.isAxiosError(error)) {
             if (error.config?.metadata?.suppressed) return Promise.reject(error);
             const start = error.config?.metadata?.startTime ?? Date.now();

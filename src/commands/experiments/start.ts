@@ -6,6 +6,7 @@ import {
   printResult,
   withErrorHandling,
 } from '../../lib/utils/api-helper.js';
+import { DryRunError } from '../../api-client/http-client.js';
 import { parseExperimentIdOrName } from './resolve-id.js';
 import { isStdinPiped, isStdoutPiped, readLinesFromStdin } from '../../lib/utils/stdin.js';
 import { resolveNote } from './resolve-note.js';
@@ -44,6 +45,10 @@ export const startCommand = new Command('start')
           }
           printResult(globalOptions, { message: `✓ Experiment ${id} started`, id });
         } catch (e) {
+          if (e instanceof DryRunError) {
+            console.error(chalk.blue(`○ Experiment ${idStr}: ${e.message}`));
+            continue;
+          }
           hasFailures = true;
           if (isStdoutPiped() && options.passThrough) console.log(idStr);
           console.error(chalk.red(`✗ Experiment ${idStr}: ${e instanceof Error ? e.message : e}`));
