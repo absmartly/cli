@@ -166,8 +166,6 @@ export function getGlobalOptions(cmd: Command): GlobalOptions {
   // so the user doesn't have to type both.
   const statusOnly = opts.statusOnly || false;
   const showResponse = opts.showResponse || statusOnly || false;
-  // --dry-run implies --show-request (so the payload is still shown) unless the
-  // user asked for curl output instead.
   const dryRun = opts.dryRun || false;
   const curl = opts.curl || false;
   const showRequest = opts.showRequest || (dryRun && !curl) || false;
