@@ -64,7 +64,7 @@ interface CustomFieldResult {
 type LookupUser = NonNullable<ResolverContext['users']>[number];
 
 interface UserLookup {
-  /** Users whose lowercased email equals `ref`, first one wins. */
+  /** First user, in input order, whose lowercased email equals `ref`. */
   byEmail(ref: string): LookupUser | undefined;
   /** Users whose lowercased email or "first last" equals `ref`, in input order. */
   matching(ref: string): LookupUser[];
@@ -75,27 +75,21 @@ interface UserLookup {
  * rather than a scan of every user (which was quadratic in owners x users).
  */
 function indexUsers(users: ResolverContext['users']): UserLookup {
-  const byEmail = new Map<string, number[]>();
-  const byName = new Map<string, number[]>();
-  const add = (map: Map<string, number[]>, key: string, index: number) => {
-    const list = map.get(key);
-    if (list) list.push(index);
-    else map.set(key, [index]);
-  };
-  const list = users ?? [];
-  list.forEach((u, index) => {
-    add(byEmail, u.email.toLowerCase(), index);
-    add(byName, `${u.first_name ?? ''} ${u.last_name ?? ''}`.trim().toLowerCase(), index);
-  });
+  const byEmail = new Map<string, LookupUser>();
+  const byEmailOrName = new Map<string, LookupUser[]>();
+  for (const u of users ?? []) {
+    const email = u.email.toLowerCase();
+    const name = `${u.first_name ?? ''} ${u.last_name ?? ''}`.trim().toLowerCase();
+    if (!byEmail.has(email)) byEmail.set(email, u);
+    for (const key of email === name ? [email] : [email, name]) {
+      const list = byEmailOrName.get(key);
+      if (list) list.push(u);
+      else byEmailOrName.set(key, [u]);
+    }
+  }
   return {
-    byEmail: (ref) => {
-      const first = byEmail.get(ref)?.[0];
-      return first === undefined ? undefined : list[first];
-    },
-    matching: (ref) => {
-      const indexes = new Set([...(byEmail.get(ref) ?? []), ...(byName.get(ref) ?? [])]);
-      return [...indexes].sort((a, b) => a - b).map((index) => list[index]!);
-    },
+    byEmail: (ref) => byEmail.get(ref),
+    matching: (ref) => byEmailOrName.get(ref) ?? [],
   };
 }
 

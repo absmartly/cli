@@ -2,15 +2,25 @@ import { describe, it, expect, vi } from 'vitest';
 import { resolveBySearch } from './search-resolver.js';
 
 describe('resolveBySearch', () => {
-  it('refuses more than 100 distinct searches before making requests', async () => {
+  it('has no search limit unless the caller sets one', async () => {
+    const search = vi.fn().mockResolvedValue([]);
+    await resolveBySearch(
+      Array.from({ length: 150 }, (_, i) => `n${i}`),
+      search
+    );
+    expect(search).toHaveBeenCalledTimes(150);
+  });
+
+  it('refuses more distinct searches than maxSearches before making requests', async () => {
     const search = vi.fn();
-    await expect(
-      resolveBySearch(
-        Array.from({ length: 101 }, (_, i) => `n${i}`),
-        search
-      )
-    ).rejects.toThrow(/100 distinct names/);
+    const queries = [...Array.from({ length: 4 }, (_, i) => `n${i}`), 'n0', '42'];
+    await expect(resolveBySearch(queries, search, { maxSearches: 3 })).rejects.toThrow(
+      /4 distinct names need a search; the limit is 3/
+    );
     expect(search).not.toHaveBeenCalled();
+    await expect(
+      resolveBySearch(queries, vi.fn().mockResolvedValue([]), { maxSearches: 4 })
+    ).resolves.toEqual([{ id: 42 }]);
   });
 
   it('keeps at most five searches in flight and retains query order', async () => {

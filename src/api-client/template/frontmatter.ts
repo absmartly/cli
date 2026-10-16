@@ -7,6 +7,8 @@ export interface Frontmatter {
 
 const DELIMITER = '---';
 const YAML_LANGUAGES = new Set(['yaml', 'yml']);
+// Real templates hold a few hundred YAML nodes.
+const MAX_FRONTMATTER_NODES = 50_000;
 
 /**
  * Splits `---` YAML frontmatter from a markdown body, following gray-matter's
@@ -58,7 +60,19 @@ const TEMPLATE_SCHEMA = yaml.DEFAULT_SCHEMA.extend([
 ]);
 
 function loadYamlMapping(block: string): Record<string, unknown> {
-  const loaded = yaml.load(block, { schema: TEMPLATE_SCHEMA, listener: rejectAnchors });
+  let nodes = 0;
+  const loaded = yaml.load(block, {
+    schema: TEMPLATE_SCHEMA,
+    listener: (eventType, state) => {
+      rejectAnchors(eventType, state);
+      // Every key, value and collection opens once, so this bounds what the
+      // loader materialises and what later stages enumerate. Throwing from
+      // the listener stops the load at the limit.
+      if (eventType === 'open' && ++nodes > MAX_FRONTMATTER_NODES) {
+        throw new Error(`Frontmatter has more than ${MAX_FRONTMATTER_NODES} YAML nodes`);
+      }
+    },
+  });
   return isPlainObject(loaded) ? loaded : {};
 }
 

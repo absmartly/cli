@@ -64,9 +64,24 @@ describe('splitFrontmatter', () => {
   });
 
   it('rejects a long string aliased into many places', () => {
-    const big = 'x'.repeat(1_000_000);
+    // The anchor fails as soon as its node closes, before any alias is read.
+    const big = 'x'.repeat(100_000);
     const refs = Array.from({ length: 50_000 }, (_, i) => `  - name: v${i}\n    config: *c`);
     expectFastThrow(`---\nc: &c "${big}"\nvariants:\n${refs.join('\n')}\n---\n`);
+  });
+
+  it('stops loading frontmatter past the node budget', () => {
+    // ~9 MB of distinct keys, near the 10M-character template cap.
+    const keys = Array.from({ length: 600_000 }, (_, i) => `k${i}: 1`).join('\n');
+    const start = performance.now();
+    expect(() => splitFrontmatter(`---\n${keys}\n---\n`)).toThrow(/more than 50000 YAML nodes/);
+    expect(performance.now() - start).toBeLessThan(500);
+  });
+
+  it('accepts a large realistic frontmatter under the node budget', () => {
+    const metrics = Array.from({ length: 2_000 }, (_, i) => `  - metric_${i}`).join('\n');
+    const { data } = splitFrontmatter(`---\nname: e\nsecondary_metrics:\n${metrics}\n---\n`);
+    expect(data.secondary_metrics).toHaveLength(2_000);
   });
 
   it('rejects anchors on scalars and inside flow collections', () => {
@@ -76,14 +91,15 @@ describe('splitFrontmatter', () => {
   });
 
   it('rejects !!omap without running its quadratic duplicate-key check', () => {
-    // 40k entries took ~1 s with js-yaml's default !!omap resolver; parsing
-    // the sequence itself is linear and well under the bound.
-    const entries = Array.from({ length: 40_000 }, (_, i) => `  - k${i}: 1`).join('\n');
+    // The node budget caps an !!omap at ~12k entries (4 nodes each), which
+    // took ~25 ms with js-yaml's quadratic resolver; reject the tag anyway so
+    // the budget is not the only thing standing between it and 40k (~1 s).
+    const entries = Array.from({ length: 12_000 }, (_, i) => `  - k${i}: 1`).join('\n');
     const start = performance.now();
     expect(() => splitFrontmatter(`---\nx: !!omap\n${entries}\n---\n`)).toThrow(
       /!!omap is not supported/
     );
-    expect(performance.now() - start).toBeLessThan(500);
+    expect(performance.now() - start).toBeLessThan(100);
   });
 
   it('keeps & and * inside values', () => {

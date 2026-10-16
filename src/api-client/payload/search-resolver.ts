@@ -4,9 +4,21 @@ function extractSearchTerm(query: string): string {
   return extractAngleBracketed(query) ?? query;
 }
 
+export interface ResolveBySearchOptions {
+  /**
+   * Refuse, before any request, when more than this many distinct names need
+   * a search. Each costs one backend request; callers handling untrusted input
+   * (templates over /mcp) set it.
+   */
+  maxSearches?: number;
+}
+
+const SEARCH_CONCURRENCY = 5;
+
 export async function resolveBySearch<T extends { id: number }>(
   queries: string[],
-  searchFn: (query: string) => Promise<T[]>
+  searchFn: (query: string) => Promise<T[]>,
+  options: ResolveBySearchOptions = {}
 ): Promise<T[]> {
   const seen = new Set<number>();
   const results: T[] = [];
@@ -25,14 +37,17 @@ export async function resolveBySearch<T extends { id: number }>(
         .map(extractSearchTerm)
     ),
   ];
-  // Each distinct name costs one backend request. Refuse excessive fan-out
-  // before issuing any request, and keep only a few requests in flight.
-  if (searchTerms.length > 100) {
-    throw new Error('Template references more than 100 distinct names; use numeric IDs instead');
+  const { maxSearches } = options;
+  if (maxSearches !== undefined && searchTerms.length > maxSearches) {
+    throw new Error(
+      `${searchTerms.length} distinct names need a search; the limit is ${maxSearches}. Use numeric IDs instead`
+    );
   }
+  // Keep only a few requests in flight rather than one per name at once.
   const batches: T[][] = [];
-  for (let i = 0; i < searchTerms.length; i += 5) {
-    batches.push(...(await Promise.all(searchTerms.slice(i, i + 5).map(searchFn))));
+  for (let i = 0; i < searchTerms.length; i += SEARCH_CONCURRENCY) {
+    const chunk = searchTerms.slice(i, i + SEARCH_CONCURRENCY);
+    batches.push(...(await Promise.all(chunk.map(searchFn))));
   }
   for (const batch of batches) {
     for (const item of batch) {
