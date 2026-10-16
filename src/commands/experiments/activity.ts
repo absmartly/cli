@@ -10,6 +10,7 @@ import {
   withErrorHandling,
 } from '../../lib/utils/api-helper.js';
 import { parseNoteId } from '../../lib/utils/validators.js';
+import { replaceMarkdownImages } from '../../lib/utils/linear-match.js';
 import { parseExperimentIdOrName } from './resolve-id.js';
 import { formatNoteText, type NoteLookups } from '../activity/index.js';
 import { fetchAndDisplayImage, supportsInlineImages } from '../../lib/utils/terminal-image.js';
@@ -90,13 +91,10 @@ const listActivityCommand = new Command('list')
           if (showImages) {
             const IMG_PLACEHOLDER = '\x00IMG:';
             const images: Array<{ alt: string; url: string }> = [];
-            const withPlaceholders = noteText.replace(
-              /!\[([^\]]*)\]\(([^)]+)\)/g,
-              (_, alt, url) => {
-                images.push({ alt, url });
-                return `${IMG_PLACEHOLDER}${images.length - 1}\x00`;
-              }
-            );
+            const withPlaceholders = replaceMarkdownImages(noteText, (alt, url) => {
+              images.push({ alt, url });
+              return `${IMG_PLACEHOLDER}${images.length - 1}\x00`;
+            });
 
             const formatted = formatNoteText(withPlaceholders, lookups);
             const parts = formatted.split(/\x00IMG:(\d+)\x00/);

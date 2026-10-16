@@ -1,7 +1,7 @@
+import { extractAngleBracketed } from '../../lib/utils/linear-match.js';
+
 function extractSearchTerm(query: string): string {
-  const emailInBrackets = /<(.+?)>/.exec(query);
-  if (emailInBrackets) return emailInBrackets[1]!;
-  return query;
+  return extractAngleBracketed(query) ?? query;
 }
 
 export async function resolveBySearch<T extends { id: number }>(
