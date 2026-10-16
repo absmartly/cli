@@ -193,6 +193,48 @@ describe('buildExperimentPayload', () => {
       expect(warnings).toContain('Owner "nobody" not found, skipping');
     });
 
+    const reviewerField = [
+      { id: 9, title: 'Reviewers', type: 'user', custom_section: { type: 'test' } },
+    ];
+    const reviewers = async (value: string, ctxUsers = users) => {
+      const { payload } = await buildExperimentPayload(
+        { name: 'exp', custom_fields: { Reviewers: value } },
+        { ...baseContext, users: ctxUsers, customSectionFields: reviewerField }
+      );
+      const values = payload.custom_section_field_values as Record<string, { value: string }>;
+      return JSON.parse(values['9']!.value);
+    };
+
+    it('resolves user custom fields by email case-insensitively, first match wins', async () => {
+      const dupes = [...users, { id: 4, email: 'ANN@example.com' }];
+      expect(
+        await reviewers(' Ann@Example.com ,user:7, nobody@x.com,BOB@example.com', dupes)
+      ).toEqual({
+        selected: [{ userId: 1 }, { userId: 7 }, { userId: 2 }],
+      });
+    });
+
+    it('lowercases each reference once for special-casing characters', async () => {
+      const manyUsers = Array.from({ length: 1_000 }, (_, i) => ({
+        id: i,
+        email: `u${i}@example.com`,
+      }));
+      for (const ch of ['\u0130', '\u03A3']) {
+        const refs = Array.from({ length: 50 }, (_, i) => ch.repeat(5_000) + i);
+        const start = performance.now();
+        await buildExperimentPayload(
+          { name: 'exp', owners: refs },
+          { ...baseContext, users: manyUsers }
+        );
+        expect(await reviewers(refs.join(','), manyUsers)).toEqual({ selected: [] });
+        expect(performance.now() - start).toBeLessThan(100);
+      }
+      // Matching still lowercases with full Unicode case mapping.
+      expect(
+        await reviewers('\u0130\u03A3@EXAMPLE.COM', [{ id: 5, email: 'i\u0307\u03C2@example.com' }])
+      ).toEqual({ selected: [{ userId: 5 }] });
+    });
+
     it('resolves many owners against many users in linear time', async () => {
       const manyUsers = Array.from({ length: 20_000 }, (_, i) => ({
         id: i,
