@@ -57,20 +57,23 @@ function loadYamlMapping(block: string): Record<string, unknown> {
 /**
  * YAML aliases (`*ref`) reuse one node in many places, so a few hundred bytes
  * can stand for billions of values once the template is copied or serialised
- * (a "billion laughs" document). Count nodes the way a consumer walks them,
- * revisits included, and stop past a budget no real template comes near.
+ * (a "billion laughs" document), and a self-referencing alias makes a cycle.
+ * Count nodes the way a consumer walks them, revisits included, and charge
+ * each node's children before queueing them, so work and pending storage both
+ * stay under a budget no real template comes near.
  */
 function assertBoundedSize(root: Record<string, unknown>): void {
   const stack: unknown[] = [root];
-  let visited = 0;
+  let scheduled = 1;
   while (stack.length > 0) {
     const node = stack.pop();
-    if (++visited > MAX_FRONTMATTER_NODES) {
+    if (!Array.isArray(node) && !isPlainObject(node)) continue;
+    const children = Object.values(node);
+    scheduled += children.length;
+    if (scheduled > MAX_FRONTMATTER_NODES) {
       throw new Error(`Frontmatter expands to more than ${MAX_FRONTMATTER_NODES} values`);
     }
-    if (Array.isArray(node) || isPlainObject(node)) {
-      for (const child of Object.values(node)) stack.push(child);
-    }
+    for (const child of children) stack.push(child);
   }
 }
 

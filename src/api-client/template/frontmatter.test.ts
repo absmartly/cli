@@ -53,6 +53,15 @@ describe('splitFrontmatter', () => {
     expect(performance.now() - start).toBeLessThan(100);
   });
 
+  it('rejects cyclic aliases with bounded work', () => {
+    for (const width of [100, 300, 3000]) {
+      const md = `---\na: &a [${Array(width).fill('*a').join(',')}]\n---\n`;
+      const start = performance.now();
+      expect(() => splitFrontmatter(md)).toThrow(/expands to more/);
+      expect(performance.now() - start).toBeLessThan(100);
+    }
+  });
+
   it('allows aliases of plain values', () => {
     expect(splitFrontmatter('---\nname: &n exp\ndisplay_name: *n\n---\n').data).toEqual({
       name: 'exp',
