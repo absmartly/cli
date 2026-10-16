@@ -2316,8 +2316,10 @@ export class APIClient {
       const searchRef = (extractAngleBracketed(trimmed) ?? trimmed).toLowerCase();
       const match = results.filter(
         (u) =>
-          u.email.toLowerCase() === searchRef ||
-          `${u.first_name ?? ''} ${u.last_name ?? ''}`.trim().toLowerCase() === searchRef
+          // ID-only placeholders for numeric refs have no email or name.
+          typeof u.email === 'string' &&
+          (u.email.toLowerCase() === searchRef ||
+            `${u.first_name ?? ''} ${u.last_name ?? ''}`.trim().toLowerCase() === searchRef)
       );
       if (match.length === 1) return match[0]!;
       if (match.length > 1)

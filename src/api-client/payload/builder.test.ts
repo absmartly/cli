@@ -5,6 +5,7 @@ import { buildExperimentPayload } from './builder.js';
 import type { ExperimentTemplate } from '../template/parser.js';
 import type { ResolverContext } from './resolver.js';
 import { loadOpenAPISpec, validateRequestStrict } from 'absmartly-api-mocks/validation';
+import { bySize, expectLinearAsync } from '../../test/helpers/timing.js';
 
 const validationEntry = fileURLToPath(import.meta.resolve('absmartly-api-mocks/validation'));
 const mocksDir = resolve(dirname(validationEntry), '..', '..');
@@ -215,19 +216,22 @@ describe('buildExperimentPayload', () => {
     });
 
     it('lowercases each reference once for special-casing characters', async () => {
-      const manyUsers = Array.from({ length: 1_000 }, (_, i) => ({
-        id: i,
-        email: `u${i}@example.com`,
-      }));
+      // Users and reference length both grow with n, so lowercasing each
+      // reference once per user (the old code) is quadratic while lowercasing
+      // it once is linear.
+      const usersOf = bySize((n) =>
+        Array.from({ length: n }, (_, i) => ({ id: i, email: `u${i}@example.com` }))
+      );
       for (const ch of ['\u0130', '\u03A3']) {
-        const refs = Array.from({ length: 50 }, (_, i) => ch.repeat(5_000) + i);
-        const start = performance.now();
-        await buildExperimentPayload(
-          { name: 'exp', owners: refs },
-          { ...baseContext, users: manyUsers }
-        );
-        expect(await reviewers(refs.join(','), manyUsers)).toEqual({ selected: [] });
-        expect(performance.now() - start).toBeLessThan(100);
+        const refsOf = bySize((n) => Array.from({ length: 50 }, (_, i) => ch.repeat(n) + i));
+        await expectLinearAsync(async (n) => {
+          await buildExperimentPayload(
+            { name: 'exp', owners: refsOf(n) },
+            { ...baseContext, users: usersOf(n) }
+          );
+          await reviewers(refsOf(n).join(','), usersOf(n));
+        }, 1_000);
+        expect(await reviewers(refsOf(1_000).join(','), usersOf(1_000))).toEqual({ selected: [] });
       }
       // Matching still lowercases with full Unicode case mapping.
       expect(
@@ -236,19 +240,21 @@ describe('buildExperimentPayload', () => {
     });
 
     it('resolves many owners against many users in linear time', async () => {
-      const manyUsers = Array.from({ length: 20_000 }, (_, i) => ({
-        id: i,
-        email: `u${i}@example.com`,
-        first_name: 'U',
-        last_name: String(i),
-      }));
-      const owners = manyUsers.map((u) => u.email);
-      const start = performance.now();
-      const { payload } = await buildExperimentPayload(
-        { name: 'exp', owners },
-        { ...baseContext, users: manyUsers }
+      const usersOf = bySize((n) =>
+        Array.from({ length: n }, (_, i) => ({
+          id: i,
+          email: `u${i}@example.com`,
+          first_name: 'U',
+          last_name: String(i),
+        }))
       );
-      expect(performance.now() - start).toBeLessThan(500);
+      const build = (n: number) =>
+        buildExperimentPayload(
+          { name: 'exp', owners: usersOf(n).map((u) => u.email) },
+          { ...baseContext, users: usersOf(n) }
+        );
+      await expectLinearAsync(build, 5_000);
+      const { payload } = await build(20_000);
       expect((payload.owners as unknown[]).length).toBe(20_000);
     });
   });

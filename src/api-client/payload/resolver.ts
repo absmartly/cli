@@ -35,7 +35,10 @@ export function resolveByName<T extends { id: number; name: string }>(
   }
 
   const lowerName = trimmed.toLowerCase();
-  const matches = items.filter((item) => item.name.toLowerCase() === lowerName);
+  // Search results include ID-only placeholders for numeric refs; they have no name.
+  const matches = items.filter(
+    (item) => typeof item.name === 'string' && item.name.toLowerCase() === lowerName
+  );
 
   if (matches.length === 1) {
     return matches[0]!;
@@ -58,6 +61,7 @@ export function createNameResolver<T extends { id: number; name: string }>(
   const byName = new Map<string, T[]>();
   for (const item of items) {
     if (!byId.has(item.id)) byId.set(item.id, item);
+    if (typeof item.name !== 'string') continue; // ID-only placeholder
     const key = item.name.toLowerCase();
     const existing = byName.get(key);
     if (existing) existing.push(item);

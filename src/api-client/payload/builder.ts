@@ -78,6 +78,8 @@ function indexUsers(users: ResolverContext['users']): UserLookup {
   const byEmail = new Map<string, LookupUser>();
   const byEmailOrName = new Map<string, LookupUser[]>();
   for (const u of users ?? []) {
+    // Search results include ID-only placeholders for numeric owner refs.
+    if (typeof u.email !== 'string') continue;
     const email = u.email.toLowerCase();
     const name = `${u.first_name ?? ''} ${u.last_name ?? ''}`.trim().toLowerCase();
     if (!byEmail.has(email)) byEmail.set(email, u);
