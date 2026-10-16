@@ -50,7 +50,19 @@ export interface ExperimentTemplate {
   note?: string;
 }
 
+/**
+ * Largest template accepted, in UTF-16 code units. Real templates are a few
+ * KB; inline data: screenshots can add a few MB. Every stage below is linear,
+ * so this only caps the memory a single untrusted template can claim.
+ */
+export const MAX_TEMPLATE_LENGTH = 10 * 1024 * 1024;
+
 export function parseExperimentMarkdown(content: string): ExperimentTemplate {
+  if (content.length > MAX_TEMPLATE_LENGTH) {
+    throw new Error(
+      `Template content is ${content.length} characters; the limit is ${MAX_TEMPLATE_LENGTH}`
+    );
+  }
   let data: Record<string, unknown>;
   let markdownContent: string;
   try {
@@ -92,6 +104,8 @@ export function parseExperimentMarkdown(content: string): ExperimentTemplate {
     (template as Record<string, unknown>)[key] = value;
   }
 
+  template.custom_fields = { ...template.custom_fields };
+
   const knownBodySections = new Set(['Variants', 'Audience']);
 
   for (const [sectionName, sectionContent] of Object.entries(sections)) {
@@ -110,8 +124,9 @@ export function parseExperimentMarkdown(content: string): ExperimentTemplate {
 
     if (!knownBodySections.has(sectionName)) {
       if (sectionContent.includes('###')) {
-        const fields = parseCustomFields(sectionContent);
-        template.custom_fields = { ...template.custom_fields, ...fields };
+        // Merge in place: spreading into a new object per section is quadratic
+        // in the number of sections.
+        Object.assign(template.custom_fields!, parseCustomFields(sectionContent));
       } else {
         // `\w` already includes `_`; the old `(\w+(?:_\w+)*)` matched the same
         // keys but backtracked exponentially on `a_a_a_..._a` lines with no colon.

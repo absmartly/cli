@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseExperimentMarkdown } from './parser.js';
+import { MAX_TEMPLATE_LENGTH, parseExperimentMarkdown } from './parser.js';
 import { allStrings } from '../../test/helpers/differential.js';
 
 function expectFast(run: () => void): void {
@@ -221,6 +221,13 @@ name: exp1
     expect(result.percentages).toBe('50/50');
   });
 
+  it('merges custom fields across sections, later sections winning', () => {
+    const result = parseExperimentMarkdown(
+      '## A\n### One\n1\n### Two\n2\n## B\n### Two\n22\n### Three\n3\n'
+    );
+    expect(result.custom_fields).toEqual({ One: '1', Two: '22', Three: '3' });
+  });
+
   it('parses keys with underscores, digits and mixed case', () => {
     const md = `## Basic Info
 
@@ -294,6 +301,25 @@ dash-key: e
       const spaces = ' '.repeat(100_000);
       expectFast(() => parseExperimentMarkdown(`## Variants\n### variant_0\na:${spaces}x\ry\n`));
       expectFast(() => parseExperimentMarkdown(`## Foo\nk:\n-${spaces}x\ry\n`));
+    });
+
+    it('many sections that each hold custom fields', () => {
+      const md = Array.from({ length: 8_000 }, (_, i) => `## S${i}\n### F${i}\nv${i}\n`).join('');
+      let result: ReturnType<typeof parseExperimentMarkdown> | undefined;
+      expectFast(() => {
+        result = parseExperimentMarkdown(md);
+      });
+      expect(Object.keys(result!.custom_fields!)).toHaveLength(8_000);
+      expect(result!.custom_fields!.F7999).toBe('v7999');
+    });
+
+    it('rejects content over the size limit before parsing', () => {
+      expectFast(() =>
+        expect(() => parseExperimentMarkdown('x'.repeat(MAX_TEMPLATE_LENGTH + 1))).toThrow(
+          /the limit is/
+        )
+      );
+      expect(() => parseExperimentMarkdown('## A\n' + 'x'.repeat(5_000_000))).not.toThrow();
     });
 
     it('many empty keys each followed by a list scan', () => {

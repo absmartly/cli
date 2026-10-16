@@ -25,7 +25,15 @@ export async function resolveBySearch<T extends { id: number }>(
         .map(extractSearchTerm)
     ),
   ];
-  const batches = await Promise.all(searchTerms.map(searchFn));
+  // Each distinct name costs one backend request. Refuse excessive fan-out
+  // before issuing any request, and keep only a few requests in flight.
+  if (searchTerms.length > 100) {
+    throw new Error('Template references more than 100 distinct names; use numeric IDs instead');
+  }
+  const batches: T[][] = [];
+  for (let i = 0; i < searchTerms.length; i += 5) {
+    batches.push(...(await Promise.all(searchTerms.slice(i, i + 5).map(searchFn))));
+  }
   for (const batch of batches) {
     for (const item of batch) {
       if (!seen.has(item.id)) {

@@ -2,6 +2,31 @@ import { describe, it, expect, vi } from 'vitest';
 import { resolveBySearch } from './search-resolver.js';
 
 describe('resolveBySearch', () => {
+  it('refuses more than 100 distinct searches before making requests', async () => {
+    const search = vi.fn();
+    await expect(
+      resolveBySearch(
+        Array.from({ length: 101 }, (_, i) => `n${i}`),
+        search
+      )
+    ).rejects.toThrow(/100 distinct names/);
+    expect(search).not.toHaveBeenCalled();
+  });
+
+  it('keeps at most five searches in flight and retains query order', async () => {
+    let active = 0;
+    let maxActive = 0;
+    const queries = Array.from({ length: 20 }, (_, i) => `n${i}`);
+    const result = await resolveBySearch(queries, async (name) => {
+      maxActive = Math.max(maxActive, ++active);
+      await Promise.resolve();
+      active--;
+      return [{ id: Number(name.slice(1)) }];
+    });
+    expect(maxActive).toBe(5);
+    expect(result.map((r) => r.id)).toEqual(queries.map((_, i) => i));
+  });
+
   it('deduplicates results by id', async () => {
     const searchFn = vi
       .fn()

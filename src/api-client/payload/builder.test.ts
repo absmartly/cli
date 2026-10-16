@@ -165,6 +165,65 @@ describe('buildExperimentPayload', () => {
     expect(payload.owners).toEqual([{ user_id: 42 }]);
   });
 
+  describe('owner and user custom field resolution', () => {
+    const users = [
+      { id: 1, email: 'ann@example.com', first_name: 'Ann', last_name: 'Lee' },
+      { id: 2, email: 'bob@example.com', first_name: 'Ann', last_name: 'Lee' },
+      { id: 3, email: 'ANN.lee@example.com', first_name: 'Cy', last_name: 'Ho' },
+    ];
+
+    it('resolves owners by email, by "Name <email>" and by name, case-insensitively', async () => {
+      const { payload, warnings } = await buildExperimentPayload(
+        { name: 'exp', owners: ['BOB@example.com', 'X <ann.lee@EXAMPLE.com>', '7'] },
+        { ...baseContext, users }
+      );
+      expect(payload.owners).toEqual([{ user_id: 2 }, { user_id: 3 }, { user_id: 7 }]);
+      expect(warnings).toEqual([]);
+    });
+
+    it('warns with matches in input order when a name is ambiguous', async () => {
+      const { payload, warnings } = await buildExperimentPayload(
+        { name: 'exp', owners: ['ann lee', 'nobody'] },
+        { ...baseContext, users }
+      );
+      expect(payload.owners).toBeUndefined();
+      expect(warnings).toContain(
+        'Owner "ann lee" matches multiple users: ann@example.com (id: 1), bob@example.com (id: 2). Use email to disambiguate.'
+      );
+      expect(warnings).toContain('Owner "nobody" not found, skipping');
+    });
+
+    it('resolves many owners against many users in linear time', async () => {
+      const manyUsers = Array.from({ length: 20_000 }, (_, i) => ({
+        id: i,
+        email: `u${i}@example.com`,
+        first_name: 'U',
+        last_name: String(i),
+      }));
+      const owners = manyUsers.map((u) => u.email);
+      const start = performance.now();
+      const { payload } = await buildExperimentPayload(
+        { name: 'exp', owners },
+        { ...baseContext, users: manyUsers }
+      );
+      expect(performance.now() - start).toBeLessThan(500);
+      expect((payload.owners as unknown[]).length).toBe(20_000);
+    });
+  });
+
+  it('numbers screenshots by position when variants have no explicit number', async () => {
+    const variants = Array.from({ length: 3 }, (_, i) => ({
+      name: `v${i}`,
+      screenshot_id: 10 + i,
+    }));
+    const { payload } = await buildExperimentPayload({ name: 'exp', variants }, baseContext);
+    expect(payload.variant_screenshots).toEqual([
+      { variant: 0, screenshot_file_upload_id: 10 },
+      { variant: 1, screenshot_file_upload_id: 11 },
+      { variant: 2, screenshot_file_upload_id: 12 },
+    ]);
+  });
+
   it('should include group_sequential fields only when analysis_type is group_sequential', async () => {
     const template: ExperimentTemplate = { name: 'exp', analysis_type: 'group_sequential' };
     const { payload } = await buildExperimentPayload(template, baseContext);

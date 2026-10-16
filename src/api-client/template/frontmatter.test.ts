@@ -3,6 +3,12 @@ import { splitFrontmatter } from './frontmatter.js';
 import { parseExperimentMarkdown } from './parser.js';
 import { allStrings } from '../../test/helpers/differential.js';
 
+function expectFastThrow(md: string): void {
+  const start = performance.now();
+  expect(() => splitFrontmatter(md)).toThrow(/anchors and aliases are not supported/);
+  expect(performance.now() - start).toBeLessThan(100);
+}
+
 describe('splitFrontmatter', () => {
   it('splits YAML frontmatter from the body', () => {
     expect(splitFrontmatter('---\nname: exp\nowners: [a, b]\n---\n\n## Body\n')).toEqual({
@@ -41,31 +47,50 @@ describe('splitFrontmatter', () => {
     expect(() => splitFrontmatter('---\nf: !!js/function "function () {}"\n---\n')).toThrow();
   });
 
-  it('rejects YAML alias bombs', () => {
+  it('rejects YAML alias bombs before expanding them', () => {
     const layers = ['a: &a [x, x, x, x, x, x, x, x, x, x]'];
     for (let i = 1; i < 9; i++) {
       const prev = String.fromCharCode(96 + i);
       const name = String.fromCharCode(97 + i);
       layers.push(`${name}: &${name} [${Array(10).fill(`*${prev}`).join(', ')}]`);
     }
-    const start = performance.now();
-    expect(() => splitFrontmatter(`---\n${layers.join('\n')}\n---\n`)).toThrow(/expands to more/);
-    expect(performance.now() - start).toBeLessThan(100);
+    expectFastThrow(`---\n${layers.join('\n')}\n---\n`);
   });
 
-  it('rejects cyclic aliases with bounded work', () => {
-    for (const width of [100, 300, 3000]) {
-      const md = `---\na: &a [${Array(width).fill('*a').join(',')}]\n---\n`;
-      const start = performance.now();
-      expect(() => splitFrontmatter(md)).toThrow(/expands to more/);
-      expect(performance.now() - start).toBeLessThan(100);
+  it('rejects cyclic aliases', () => {
+    for (const width of [100, 300, 30_000]) {
+      expectFastThrow(`---\na: &a [${Array(width).fill('*a').join(',')}]\n---\n`);
     }
   });
 
-  it('allows aliases of plain values', () => {
-    expect(splitFrontmatter('---\nname: &n exp\ndisplay_name: *n\n---\n').data).toEqual({
-      name: 'exp',
-      display_name: 'exp',
+  it('rejects a long string aliased into many places', () => {
+    const big = 'x'.repeat(1_000_000);
+    const refs = Array.from({ length: 50_000 }, (_, i) => `  - name: v${i}\n    config: *c`);
+    expectFastThrow(`---\nc: &c "${big}"\nvariants:\n${refs.join('\n')}\n---\n`);
+  });
+
+  it('rejects anchors on scalars and inside flow collections', () => {
+    expectFastThrow('---\nname: &n exp\ndisplay_name: *n\n---\n');
+    expectFastThrow('---\na: [&q 1, *q]\n---\n');
+    expectFastThrow('---\na: &unused 1\n---\n');
+  });
+
+  it('rejects !!omap without running its quadratic duplicate-key check', () => {
+    // 40k entries took ~1 s with js-yaml's default !!omap resolver; parsing
+    // the sequence itself is linear and well under the bound.
+    const entries = Array.from({ length: 40_000 }, (_, i) => `  - k${i}: 1`).join('\n');
+    const start = performance.now();
+    expect(() => splitFrontmatter(`---\nx: !!omap\n${entries}\n---\n`)).toThrow(
+      /!!omap is not supported/
+    );
+    expect(performance.now() - start).toBeLessThan(500);
+  });
+
+  it('keeps & and * inside values', () => {
+    expect(splitFrontmatter('---\na: "&x"\nb: x&y*z\nc: "*c"\n---\n').data).toEqual({
+      a: '&x',
+      b: 'x&y*z',
+      c: '*c',
     });
   });
 
