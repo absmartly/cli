@@ -1,4 +1,5 @@
 import { APIError } from './http-client.js';
+import { extractAngleBracketed } from '../lib/utils/linear-match.js';
 import type { HttpClient, HttpRequestConfig, HttpResponse } from './http-client.js';
 import { experimentToInput } from './experiment-transform.js';
 import type { ExperimentInput } from './experiment-transform.js';
@@ -2312,8 +2313,7 @@ export class APIClient {
         if (byId) return byId;
         throw new Error(`User with ID ${asInt} not found`);
       }
-      const emailInBrackets = /<(.+?)>/.exec(trimmed);
-      const searchRef = (emailInBrackets ? emailInBrackets[1]! : trimmed).toLowerCase();
+      const searchRef = (extractAngleBracketed(trimmed) ?? trimmed).toLowerCase();
       const match = results.filter(
         (u) =>
           u.email.toLowerCase() === searchRef ||

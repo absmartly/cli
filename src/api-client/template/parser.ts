@@ -1,4 +1,10 @@
-import matter from 'gray-matter';
+import { splitFrontmatter } from './frontmatter.js';
+import {
+  findJsonFenceBody,
+  matchCustomFields,
+  matchListItem,
+  matchVariantKeyValue,
+} from './scan.js';
 
 export interface VariantTemplate {
   variant?: number;
@@ -48,7 +54,7 @@ export function parseExperimentMarkdown(content: string): ExperimentTemplate {
   let data: Record<string, unknown>;
   let markdownContent: string;
   try {
-    const parsed = matter(content);
+    const parsed = splitFrontmatter(content);
     data = parsed.data;
     markdownContent = parsed.content;
   } catch (error) {
@@ -95,9 +101,9 @@ export function parseExperimentMarkdown(content: string): ExperimentTemplate {
     }
 
     if (sectionName === 'Audience') {
-      const jsonMatch = /```json\s*\n([\s\S]*?)\n\s*```/.exec(sectionContent);
-      if (jsonMatch && jsonMatch[1]) {
-        template.audience = jsonMatch[1].trim();
+      const audience = findJsonFenceBody(sectionContent);
+      if (audience) {
+        template.audience = audience.trim();
       }
       continue;
     }
@@ -107,13 +113,16 @@ export function parseExperimentMarkdown(content: string): ExperimentTemplate {
         const fields = parseCustomFields(sectionContent);
         template.custom_fields = { ...template.custom_fields, ...fields };
       } else {
-        const keyValuePattern = /^(\w+(?:_\w+)*):[^\S\n]*(.*)$/gm;
+        // `\w` already includes `_`; the old `(\w+(?:_\w+)*)` matched the same
+        // keys but backtracked exponentially on `a_a_a_..._a` lines with no colon.
+        const keyValuePattern = /^(\w+):[^\S\n]*(.*)$/gm;
         let match;
         while ((match = keyValuePattern.exec(sectionContent)) !== null) {
           const matchedKey = match[1];
           const matchedValue = match[2];
           if (matchedKey) {
             const key = matchedKey.toLowerCase();
+            if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue;
             const value = matchedValue ? matchedValue.trim() : '';
             if (value) {
               (template as Record<string, unknown>)[key] = value;
@@ -134,15 +143,18 @@ export function parseExperimentMarkdown(content: string): ExperimentTemplate {
 
 function parseInlineList(content: string, startOffset: number): string[] {
   const items: string[] = [];
-  const remaining = content.slice(startOffset);
-  const lines = remaining.split('\n');
-  for (const line of lines) {
-    const listMatch = /^[^\S\n]*-\s+(.+)$/.exec(line);
-    if (listMatch && listMatch[1]) {
-      items.push(listMatch[1].trim());
+  let lineStart = startOffset;
+  while (lineStart <= content.length) {
+    const newline = content.indexOf('\n', lineStart);
+    const lineEnd = newline === -1 ? content.length : newline;
+    const line = content.slice(lineStart, lineEnd);
+    const item = matchListItem(line);
+    if (item) {
+      items.push(item.trim());
     } else if (line.trim() !== '') {
       break;
     }
+    lineStart = lineEnd + 1;
   }
   return items;
 }
@@ -178,11 +190,10 @@ function parseVariants(content: string): VariantTemplate[] {
         continue;
       }
 
-      const keyValueMatch = /^(\w+):\s*(.*)$/.exec(line);
+      const keyValueMatch = matchVariantKeyValue(line);
       if (keyValueMatch) {
-        const matchedKey = keyValueMatch[1];
-        const matchedValue = keyValueMatch[2];
-        if (matchedKey && matchedValue) {
+        const [matchedKey, matchedValue] = keyValueMatch;
+        if (matchedValue) {
           const key = matchedKey.toLowerCase();
           const value = matchedValue.trim();
           if (key === 'name') variant.name = value;
@@ -204,12 +215,7 @@ function parseVariants(content: string): VariantTemplate[] {
 
 function parseCustomFields(content: string): Record<string, string> {
   const fields: Record<string, string> = {};
-  const fieldPattern = /### (.+?)\s*\n([\s\S]*?)(?=###|$)/g;
-  let match;
-
-  while ((match = fieldPattern.exec(content)) !== null) {
-    const matchedName = match[1];
-    const matchedValue = match[2];
+  for (const [matchedName, matchedValue] of matchCustomFields(content)) {
     if (matchedName && matchedValue) {
       const fieldName = matchedName.trim();
       const fieldValue = matchedValue.trim();

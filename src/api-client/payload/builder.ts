@@ -1,4 +1,5 @@
 import type { ExperimentTemplate, VariantTemplate } from '../template/parser.js';
+import { extractAngleBracketed } from '../../lib/utils/linear-match.js';
 import { resolveByName, type ResolverContext } from './resolver.js';
 import { buildSecondaryMetrics } from './metrics-builder.js';
 import { resolveScreenshot } from '../template/screenshot.js';
@@ -317,8 +318,7 @@ export async function buildExperimentPayload(
         resolvedOwners.push({ user_id: asInt });
       } else {
         const raw = String(ownerRef).trim();
-        const emailInBrackets = /<(.+?)>/.exec(raw);
-        const ref = (emailInBrackets ? emailInBrackets[1]! : raw).toLowerCase();
+        const ref = (extractAngleBracketed(raw) ?? raw).toLowerCase();
         const matches = context.users.filter(
           (u) =>
             u.email.toLowerCase() === ref ||
