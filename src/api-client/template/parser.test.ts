@@ -274,6 +274,11 @@ dash-key: e
       expectFast(() => parseExperimentMarkdown('## Foo\n' + 'a_'.repeat(50_000) + '!'));
     });
 
+    it('audience section with many invalid json fence openings', () => {
+      expectFast(() => parseExperimentMarkdown('## Audience\n' + '```jsonx'.repeat(40_000)));
+      expectFast(() => parseExperimentMarkdown('## Audience\n' + '```json \t'.repeat(40_000)));
+    });
+
     it('audience json fence with no closing fence', () => {
       expectFast(() =>
         parseExperimentMarkdown('## Audience\n```json' + '\n'.repeat(100_000) + 'x')

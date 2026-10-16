@@ -12,9 +12,18 @@ export function findJsonFenceBody(content: string): string | undefined {
   // the first opening followed by a newline finds no closing, none will.
   for (let i = open; i !== -1; i = content.indexOf(OPEN, i + 1)) {
     const afterOpen = i + OPEN.length;
-    const runEnd = skipWhitespace(content, afterOpen);
-    const lastNewline = content.lastIndexOf('\n', runEnd - 1);
-    if (lastNewline < afterOpen) continue;
+    // Find the last two newlines inside the opening whitespace run only, so
+    // a run of invalid openings never rescans the input before it.
+    let runEnd = afterOpen;
+    let lastNewline = -1;
+    let previousNewline = -1;
+    for (; runEnd < content.length && isWhitespace(content.charAt(runEnd)); runEnd++) {
+      if (content.charAt(runEnd) === '\n') {
+        previousNewline = lastNewline;
+        lastNewline = runEnd;
+      }
+    }
+    if (lastNewline === -1) continue;
 
     const bodyStart = lastNewline + 1;
     for (let nl = content.indexOf('\n', bodyStart); nl !== -1; ) {
@@ -26,8 +35,7 @@ export function findJsonFenceBody(content: string): string | undefined {
 
     // Backtracking: an earlier newline in the opening run can close a
     // whitespace-only body when a fence directly follows that run.
-    const previousNewline = content.lastIndexOf('\n', lastNewline - 1);
-    if (previousNewline >= afterOpen && content.startsWith(FENCE, runEnd)) {
+    if (previousNewline !== -1 && content.startsWith(FENCE, runEnd)) {
       return content.slice(previousNewline + 1, lastNewline);
     }
     return undefined;
