@@ -1,12 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { parseExperimentMarkdown } from './parser.js';
+import { MAX_TEMPLATE_LENGTH, parseExperimentMarkdown } from './parser.js';
 import { allStrings } from '../../test/helpers/differential.js';
-
-function expectFast(run: () => void): void {
-  const start = performance.now();
-  run();
-  expect(performance.now() - start).toBeLessThan(100);
-}
+import { bySize, expectLinear } from '../../test/helpers/timing.js';
 
 describe('parseExperimentMarkdown', () => {
   it('should parse frontmatter fields', () => {
@@ -221,6 +216,13 @@ name: exp1
     expect(result.percentages).toBe('50/50');
   });
 
+  it('merges custom fields across sections, later sections winning', () => {
+    const result = parseExperimentMarkdown(
+      '## A\n### One\n1\n### Two\n2\n## B\n### Two\n22\n### Three\n3\n'
+    );
+    expect(result.custom_fields).toEqual({ One: '1', Two: '22', Three: '3' });
+  });
+
   it('parses keys with underscores, digits and mixed case', () => {
     const md = `## Basic Info
 
@@ -269,35 +271,86 @@ dash-key: e
   });
 
   describe('stays linear on pathological input', () => {
+    // Each case times n and 4n (4n is the size these inputs had when they
+    // were found), so a return to the old super-linear scans fails on the
+    // ratio however fast the runner is.
+    const parse = (md: (n: number) => string) => (n: number) => parseExperimentMarkdown(md(n));
+
     it('key/value line with many underscores and no colon', () => {
-      expectFast(() => parseExperimentMarkdown('## Foo\n' + 'a_'.repeat(40) + '!'));
-      expectFast(() => parseExperimentMarkdown('## Foo\n' + 'a_'.repeat(50_000) + '!'));
+      // The old key regex backtracked exponentially: 40 pairs already took
+      // hours, so a generous absolute bound still proves the fix.
+      const start = performance.now();
+      parseExperimentMarkdown('## Foo\n' + 'a_'.repeat(40) + '!');
+      expect(performance.now() - start).toBeLessThan(1_000);
+      expectLinear(
+        parse((n) => '## Foo\n' + 'a_'.repeat(n) + '!'),
+        12_500
+      );
     });
 
     it('audience section with many invalid json fence openings', () => {
-      expectFast(() => parseExperimentMarkdown('## Audience\n' + '```jsonx'.repeat(40_000)));
-      expectFast(() => parseExperimentMarkdown('## Audience\n' + '```json \t'.repeat(40_000)));
+      expectLinear(
+        parse((n) => '## Audience\n' + '```jsonx'.repeat(n)),
+        10_000
+      );
+      expectLinear(
+        parse((n) => '## Audience\n' + '```json \t'.repeat(n)),
+        10_000
+      );
     });
 
     it('audience json fence with no closing fence', () => {
-      expectFast(() =>
-        parseExperimentMarkdown('## Audience\n```json' + '\n'.repeat(100_000) + 'x')
+      expectLinear(
+        parse((n) => '## Audience\n```json' + '\n'.repeat(n) + 'x'),
+        25_000
       );
     });
 
     it('custom field headings with no newline', () => {
-      expectFast(() => parseExperimentMarkdown('## Foo\n### \t' + ' \t'.repeat(100_000)));
-      expectFast(() => parseExperimentMarkdown('## Foo\n' + '### x'.repeat(20_000)));
+      expectLinear(
+        parse((n) => '## Foo\n### \t' + ' \t'.repeat(n)),
+        25_000
+      );
+      expectLinear(
+        parse((n) => '## Foo\n' + '### x'.repeat(n)),
+        5_000
+      );
     });
 
     it('variant and list lines with a long run of whitespace before a line terminator', () => {
-      const spaces = ' '.repeat(100_000);
-      expectFast(() => parseExperimentMarkdown(`## Variants\n### variant_0\na:${spaces}x\ry\n`));
-      expectFast(() => parseExperimentMarkdown(`## Foo\nk:\n-${spaces}x\ry\n`));
+      expectLinear(
+        parse((n) => `## Variants\n### variant_0\na:${' '.repeat(n)}x\ry\n`),
+        25_000
+      );
+      expectLinear(
+        parse((n) => `## Foo\nk:\n-${' '.repeat(n)}x\ry\n`),
+        25_000
+      );
+    });
+
+    it('many sections that each hold custom fields', () => {
+      const md = bySize((n) =>
+        Array.from({ length: n }, (_, i) => `## S${i}\n### F${i}\nv${i}\n`).join('')
+      );
+      expectLinear(parse(md), 2_000);
+      const result = parseExperimentMarkdown(md(8_000));
+      expect(Object.keys(result.custom_fields!)).toHaveLength(8_000);
+      expect(result.custom_fields!.F7999).toBe('v7999');
+    });
+
+    it('rejects content over the size limit before parsing', () => {
+      // The length check runs first, so this is about the error, not timing.
+      expect(() => parseExperimentMarkdown('x'.repeat(MAX_TEMPLATE_LENGTH + 1))).toThrow(
+        /the limit is/
+      );
+      expect(() => parseExperimentMarkdown('## A\n' + 'x'.repeat(5_000_000))).not.toThrow();
     });
 
     it('many empty keys each followed by a list scan', () => {
-      expectFast(() => parseExperimentMarkdown('## Foo\n' + 'k:\n'.repeat(30_000)));
+      expectLinear(
+        parse((n) => '## Foo\n' + 'k:\n'.repeat(n)),
+        7_500
+      );
     });
   });
 });

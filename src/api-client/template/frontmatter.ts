@@ -7,7 +7,8 @@ export interface Frontmatter {
 
 const DELIMITER = '---';
 const YAML_LANGUAGES = new Set(['yaml', 'yml']);
-const MAX_FRONTMATTER_NODES = 100_000;
+// Real templates hold a few hundred YAML nodes.
+const MAX_FRONTMATTER_NODES = 50_000;
 
 /**
  * Splits `---` YAML frontmatter from a markdown body, following gray-matter's
@@ -47,33 +48,47 @@ export function splitFrontmatter(input: string): Frontmatter {
   return { data: loadYamlMapping(block), content };
 }
 
+// js-yaml's default !!omap resolver scans an array of prior keys for each
+// entry (quadratic). Keep the other default YAML types, but refuse !!omap.
+const TEMPLATE_SCHEMA = yaml.DEFAULT_SCHEMA.extend([
+  new yaml.Type('tag:yaml.org,2002:omap', {
+    kind: 'sequence',
+    resolve: () => {
+      throw new Error('YAML !!omap is not supported in templates');
+    },
+  }),
+]);
+
 function loadYamlMapping(block: string): Record<string, unknown> {
-  const loaded = yaml.load(block);
-  if (!isPlainObject(loaded)) return {};
-  assertBoundedSize(loaded);
-  return loaded;
+  let nodes = 0;
+  const loaded = yaml.load(block, {
+    schema: TEMPLATE_SCHEMA,
+    listener: (eventType, state) => {
+      rejectAnchors(eventType, state);
+      // Every key, value and collection opens once, so this bounds what the
+      // loader materialises and what later stages enumerate. Throwing from
+      // the listener stops the load at the limit.
+      if (eventType === 'open' && ++nodes > MAX_FRONTMATTER_NODES) {
+        throw new Error(`Frontmatter has more than ${MAX_FRONTMATTER_NODES} YAML nodes`);
+      }
+    },
+  });
+  return isPlainObject(loaded) ? loaded : {};
 }
 
 /**
- * YAML aliases (`*ref`) reuse one node in many places, so a few hundred bytes
- * can stand for billions of values once the template is copied or serialised
- * (a "billion laughs" document), and a self-referencing alias makes a cycle.
- * Count nodes the way a consumer walks them, revisits included, and charge
- * each node's children before queueing them, so work and pending storage both
- * stay under a budget no real template comes near.
+ * YAML anchors (`&ref`) and aliases (`*ref`) let a few hundred bytes stand for
+ * gigabytes once a value is reused in many places (a "billion laughs"
+ * document), whether the reused node is a collection or one long string, and
+ * a self-reference makes a cycle. Templates never need them, so any anchor
+ * fails the parse before an alias can be resolved; an alias without an anchor
+ * is already a js-yaml error.
  */
-function assertBoundedSize(root: Record<string, unknown>): void {
-  const stack: unknown[] = [root];
-  let scheduled = 1;
-  while (stack.length > 0) {
-    const node = stack.pop();
-    if (!Array.isArray(node) && !isPlainObject(node)) continue;
-    const children = Object.values(node);
-    scheduled += children.length;
-    if (scheduled > MAX_FRONTMATTER_NODES) {
-      throw new Error(`Frontmatter expands to more than ${MAX_FRONTMATTER_NODES} values`);
-    }
-    for (const child of children) stack.push(child);
+function rejectAnchors(eventType: yaml.EventType, state: yaml.State): void {
+  // js-yaml sets `anchor` on its loader state, but @types/js-yaml omits it.
+  const { anchor } = state as yaml.State & { anchor?: string | null };
+  if (eventType === 'close' && anchor != null) {
+    throw new Error(`YAML anchors and aliases are not supported (found "&${anchor}")`);
   }
 }
 

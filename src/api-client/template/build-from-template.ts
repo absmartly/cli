@@ -3,6 +3,10 @@ import type { APIClient } from '../api-client.js';
 import { buildExperimentPayload, type BuildPayloadResult } from '../payload/builder.js';
 import { resolveBySearch } from '../payload/search-resolver.js';
 
+// Template content can be untrusted (the /mcp endpoint), and every distinct
+// metric or owner name costs one search request.
+const MAX_TEMPLATE_SEARCHES = 100;
+
 export async function buildPayloadFromTemplate(
   client: APIClient,
   template: ExperimentTemplate,
@@ -23,12 +27,16 @@ export async function buildPayloadFromTemplate(
       client.listUnitTypes(),
       client.listCustomSectionFields(),
       metricNames.length > 0
-        ? resolveBySearch(metricNames, (name) =>
-            client.listMetrics({ search: name, archived: true })
+        ? resolveBySearch(
+            metricNames,
+            (name) => client.listMetrics({ search: name, archived: true }),
+            { maxSearches: MAX_TEMPLATE_SEARCHES }
           )
         : Promise.resolve([]),
       ownerRefs.length > 0
-        ? resolveBySearch(ownerRefs, (ref) => client.listUsers({ search: ref }))
+        ? resolveBySearch(ownerRefs, (ref) => client.listUsers({ search: ref }), {
+            maxSearches: MAX_TEMPLATE_SEARCHES,
+          })
         : Promise.resolve([]),
       template.teams?.length ? client.listTeams() : Promise.resolve([]),
       template.tags?.length ? client.listExperimentTags() : Promise.resolve([]),

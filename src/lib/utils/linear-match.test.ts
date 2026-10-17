@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { extractAngleBracketed, replaceMarkdownImages } from './linear-match.js';
 import { allStrings, expectSameAsLegacy, randomStrings } from '../../test/helpers/differential.js';
+import { expectLinear } from '../../test/helpers/timing.js';
 
 const legacy = {
   angleBracketed: (s: string) => /<(.+?)>/.exec(s)?.[1],
@@ -21,9 +22,9 @@ describe('extractAngleBracketed', () => {
   });
 
   it('stays linear on a long run of unclosed brackets', () => {
-    const start = performance.now();
-    expect(extractAngleBracketed('<'.repeat(200_000) + '\n<>')).toBeUndefined();
-    expect(performance.now() - start).toBeLessThan(100);
+    const input = (n: number) => '<'.repeat(n) + '\n<>';
+    expect(extractAngleBracketed(input(200_000))).toBeUndefined();
+    expectLinear((n) => extractAngleBracketed(input(n)), 50_000);
   });
 });
 
@@ -41,8 +42,8 @@ describe('replaceMarkdownImages', () => {
   });
 
   it('stays linear on a long run of unclosed images', () => {
-    const start = performance.now();
-    replaceImages('!['.repeat(100_000) + ']![]([)');
-    expect(performance.now() - start).toBeLessThan(100);
+    const input = (n: number) => '!['.repeat(n) + ']![]([)';
+    expect(replaceImages(input(100_000))).toBe('!['.repeat(100_000) + ']{|[}');
+    expectLinear((n) => replaceImages(input(n)), 25_000);
   });
 });
