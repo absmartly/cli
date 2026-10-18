@@ -33,17 +33,38 @@ percentage_of_traffic: 80
     expect(result.percentage_of_traffic).toBe(80);
   });
 
-  it('parses percentage_of_traffic from a generated template as a number', () => {
-    const md = generateTemplate(
-      { applications: [{ name: 'app' }], unitTypes: [{ name: 'user_id' }], metrics: [] },
-      { name: 'flag', type: 'feature' }
-    );
-    expect(parseExperimentMarkdown(md).percentage_of_traffic).toBe(100);
-  });
+  describe('percentage_of_traffic', () => {
+    const context = {
+      applications: [{ name: 'app' }],
+      unitTypes: [{ name: 'user_id' }],
+      metrics: [],
+    };
 
-  it('keeps a non-numeric percentage_of_traffic as text', () => {
-    const md = `## Traffic\n\npercentage_of_traffic: lots\n`;
-    expect(parseExperimentMarkdown(md).percentage_of_traffic).toBe('lots');
+    it.each(['test', 'feature'])('is a number in a generated %s template', (type) => {
+      const md = generateTemplate(context, { name: 'x', type });
+      const result = parseExperimentMarkdown(md);
+      expect(result.type).toBe(type);
+      expect(result.percentage_of_traffic).toBe(100);
+    });
+
+    it('keeps a number from frontmatter', () => {
+      expect(
+        parseExperimentMarkdown('---\npercentage_of_traffic: 25\n---\n').percentage_of_traffic
+      ).toBe(25);
+    });
+
+    it.each(['lots', '50.5', '-1', '101', '1e2', '0x10'])('rejects %j', (value) => {
+      const md = `## Traffic\n\npercentage_of_traffic: ${value}\n`;
+      expect(() => parseExperimentMarkdown(md)).toThrow(
+        /percentage_of_traffic must be a whole number/
+      );
+    });
+
+    it('rejects a non-numeric frontmatter value', () => {
+      expect(() => parseExperimentMarkdown('---\npercentage_of_traffic: all\n---\n')).toThrow(
+        /percentage_of_traffic must be a whole number/
+      );
+    });
   });
 
   it('should parse variants', () => {
