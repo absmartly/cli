@@ -172,9 +172,10 @@ export async function resolveRoleIds(client: APIClient, values: string[]): Promi
     })) as Array<Record<string, unknown>>;
     const exact = roles.filter((r) => String(r.name ?? '').toLowerCase() === value.toLowerCase());
     if (exact.length === 0) {
-      const available = (await client.listRoles({
-        items: USER_FILTER_SCAN_PAGE_SIZE,
-      })) as Array<Record<string, unknown>>;
+      // Suggestions are best-effort: a failed lookup must not mask the real error.
+      const available = (await client
+        .listRoles({ items: USER_FILTER_SCAN_PAGE_SIZE })
+        .catch(() => [])) as Array<Record<string, unknown>>;
       const names = available.map((r) => String(r.name ?? r.id)).join(', ');
       throw new Error(
         `No role found matching name "${value}". Use a numeric role ID, or check the name.` +

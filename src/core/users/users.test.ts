@@ -123,6 +123,20 @@ describe('createUser --role', () => {
     expect(mockClient.createUser).not.toHaveBeenCalled();
   });
 
+  it('keeps the unknown-role error when the suggestions lookup fails', async () => {
+    mockClient.listRoles.mockResolvedValueOnce([]).mockRejectedValueOnce(new Error('network down'));
+
+    const err = await createUser(mockClient, {
+      email: 'a@b.com',
+      name: 'John Doe',
+      role: 'Usr',
+    }).catch((e: Error) => e);
+
+    expect((err as Error).message).toMatch(/No role found matching name "Usr"/);
+    expect((err as Error).message).not.toMatch(/Available roles/);
+    expect(mockClient.createUser).not.toHaveBeenCalled();
+  });
+
   it('omits roles when --role is not given', async () => {
     mockClient.createUser.mockResolvedValue({ id: 173 });
 
