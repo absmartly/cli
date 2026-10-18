@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { MAX_TEMPLATE_LENGTH, parseExperimentMarkdown } from './parser.js';
+import { generateTemplate } from './generator.js';
 import { allStrings } from '../../test/helpers/differential.js';
 import { bySize, expectLinear } from '../../test/helpers/timing.js';
 
@@ -29,7 +30,20 @@ percentage_of_traffic: 80
 `;
     const result = parseExperimentMarkdown(md);
     expect(result.display_name).toBe('My Experiment');
-    expect(result.percentage_of_traffic).toBe('80');
+    expect(result.percentage_of_traffic).toBe(80);
+  });
+
+  it('parses percentage_of_traffic from a generated template as a number', () => {
+    const md = generateTemplate(
+      { applications: [{ name: 'app' }], unitTypes: [{ name: 'user_id' }], metrics: [] },
+      { name: 'flag', type: 'feature' }
+    );
+    expect(parseExperimentMarkdown(md).percentage_of_traffic).toBe(100);
+  });
+
+  it('keeps a non-numeric percentage_of_traffic as text', () => {
+    const md = `## Traffic\n\npercentage_of_traffic: lots\n`;
+    expect(parseExperimentMarkdown(md).percentage_of_traffic).toBe('lots');
   });
 
   it('should parse variants', () => {

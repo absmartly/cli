@@ -140,7 +140,7 @@ export function parseExperimentMarkdown(content: string): ExperimentTemplate {
             if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue;
             const value = matchedValue ? matchedValue.trim() : '';
             if (value) {
-              (template as Record<string, unknown>)[key] = value;
+              (template as Record<string, unknown>)[key] = coerceSectionValue(key, value);
             } else {
               const listItems = parseInlineList(sectionContent, match.index + match[0].length);
               if (listItems.length > 0) {
@@ -154,6 +154,17 @@ export function parseExperimentMarkdown(content: string): ExperimentTemplate {
   }
 
   return template;
+}
+
+// Section values are plain text, unlike YAML frontmatter. The API rejects a
+// string percentage_of_traffic with HTTP 500, so numeric fields typed as
+// numbers on ExperimentTemplate must be converted here.
+const NUMERIC_SECTION_FIELDS = new Set(['percentage_of_traffic']);
+
+function coerceSectionValue(key: string, value: string): string | number {
+  if (!NUMERIC_SECTION_FIELDS.has(key)) return value;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : value;
 }
 
 function parseInlineList(content: string, startOffset: number): string[] {
