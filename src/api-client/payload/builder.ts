@@ -346,7 +346,20 @@ export async function buildExperimentPayload(
     exploratory: resolveMetricNames(template.exploratory_metrics, 'Exploratory metric'),
   });
 
-  if (allMetrics.length > 0) {
+  if (experimentType === 'feature') {
+    const metrics = template.primary_metric
+      ? [resolveByName(context.metrics, template.primary_metric, 'Metric'), ...allMetrics]
+      : allMetrics;
+    const ids = [
+      ...new Set(metrics.map((metric) => ('metric_id' in metric ? metric.metric_id : metric.id))),
+    ];
+    payload.primary_metric = { metric_id: null };
+    payload.secondary_metrics = ids.map((metric_id, order_index) => ({
+      metric_id,
+      type: 'guardrail',
+      order_index,
+    }));
+  } else if (allMetrics.length > 0) {
     payload.secondary_metrics = allMetrics;
   }
 

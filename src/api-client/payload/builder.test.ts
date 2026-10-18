@@ -74,6 +74,24 @@ describe('buildExperimentPayload', () => {
     }
   });
 
+  it('should flatten feature metrics into deduplicated guardrails and clear the primary metric', async () => {
+    const { payload } = await buildExperimentPayload(
+      {
+        name: 'feature_metrics',
+        type: 'feature',
+        primary_metric: 'clicks',
+        secondary_metrics: ['revenue', 'clicks'],
+        guardrail_metrics: ['revenue'],
+      },
+      baseContext
+    );
+    expect(payload.primary_metric).toEqual({ metric_id: null });
+    expect(payload.secondary_metrics).toEqual([
+      { metric_id: 1, type: 'guardrail', order_index: 0 },
+      { metric_id: 2, type: 'guardrail', order_index: 1 },
+    ]);
+  });
+
   it('should resolve application by name', async () => {
     const template: ExperimentTemplate = { name: 'exp', application: 'web' };
     const { payload } = await buildExperimentPayload(template, baseContext);
