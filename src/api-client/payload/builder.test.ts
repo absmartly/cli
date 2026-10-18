@@ -38,6 +38,42 @@ describe('buildExperimentPayload', () => {
     expect(variants[1].name).toBe('treatment');
   });
 
+  it('should omit experiment analysis fields from feature payloads', async () => {
+    const template: ExperimentTemplate = {
+      name: 'feature_flag',
+      type: 'feature',
+      analysis_type: 'group_sequential',
+      required_alpha: '0.05',
+      required_power: '0.9',
+      baseline_participants: '100',
+      minimum_detectable_effect: '5.0',
+      baseline_primary_metric_mean: '42.5',
+      baseline_primary_metric_stdev: '10.2',
+      group_sequential_futility_type: 'binding',
+      group_sequential_analysis_count: '3',
+      group_sequential_min_analysis_interval: '1d',
+      group_sequential_first_analysis_interval: '7d',
+      group_sequential_max_duration_interval: '6w',
+    };
+    const { payload } = await buildExperimentPayload(template, baseContext);
+    for (const field of [
+      'analysis_type',
+      'required_alpha',
+      'required_power',
+      'baseline_participants_per_day',
+      'minimum_detectable_effect',
+      'baseline_primary_metric_mean',
+      'baseline_primary_metric_stdev',
+      'group_sequential_futility_type',
+      'group_sequential_analysis_count',
+      'group_sequential_min_analysis_interval',
+      'group_sequential_first_analysis_interval',
+      'group_sequential_max_duration_interval',
+    ]) {
+      expect(payload).not.toHaveProperty(field);
+    }
+  });
+
   it('should resolve application by name', async () => {
     const template: ExperimentTemplate = { name: 'exp', application: 'web' };
     const { payload } = await buildExperimentPayload(template, baseContext);
