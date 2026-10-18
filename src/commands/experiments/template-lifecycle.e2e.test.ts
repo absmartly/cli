@@ -17,28 +17,22 @@ const COMMAND_TIMEOUT = 60_000;
 const client = createAPIClient(TEST_BASE_URL, TEST_API_KEY);
 const createdIds: ExperimentId[] = [];
 let workDir: string;
+// The child CLI takes credentials from ABSMARTLY_API_KEY. Under an OAuth live
+// run (LIVE_OAUTH_TOKEN, no CLI profile) a short-lived personal API key is
+// minted with the harness's OAuth client and deleted afterwards.
+let cliApiKey: string;
+let mintedKeyId: number | undefined;
 
 function abs(...args: string[]): { stdout: string; stderr: string; status: number | null } {
   const [cmd, ...cmdArgs] = CLI;
-  const liveProfile = process.env.LIVE_PROFILE;
-  const cliArgs = liveProfile
-    ? [...cmdArgs, '--profile', liveProfile, ...args]
-    : [...cmdArgs, ...args];
   const env: NodeJS.ProcessEnv = {
     ...process.env,
+    ABSMARTLY_API_ENDPOINT: TEST_BASE_URL,
+    ABSMARTLY_API_KEY: cliApiKey,
     NO_COLOR: '1',
   };
-  if (typeof TEST_API_KEY === 'string') {
-    env.ABSMARTLY_API_KEY = TEST_API_KEY;
-    env.ABSMARTLY_API_ENDPOINT = TEST_BASE_URL;
-  } else {
-    // OAuth live profiles are resolved by the child CLI from the same profile
-    // and keyring token as the test runner; do not coerce AuthConfig to a key.
-    delete env.ABSMARTLY_API_KEY;
-    delete env.ABSMARTLY_API_ENDPOINT;
-  }
   // spawnSync blocks the worker, so the Vitest timeout cannot interrupt a hung CLI.
-  const result = spawnSync(cmd!, cliArgs, {
+  const result = spawnSync(cmd!, [...cmdArgs, ...args], {
     encoding: 'utf8',
     env,
     timeout: COMMAND_TIMEOUT,
@@ -88,6 +82,16 @@ let ownerEmail: string;
 describe.runIf(isLiveMode)('experiments created from a generated template (live)', () => {
   beforeAll(async () => {
     workDir = mkdtempSync(join(tmpdir(), 'abs-template-e2e-'));
+    if (typeof TEST_API_KEY === 'string') {
+      cliApiKey = TEST_API_KEY;
+    } else {
+      const minted = (await client.createUserApiKey(`cli-template-e2e-${Date.now()}`)) as {
+        id: number;
+        key: string;
+      };
+      mintedKeyId = minted.id;
+      cliApiKey = minted.key;
+    }
     const [metrics, user] = await Promise.all([
       client.listMetrics({ items: 50 }),
       client.getCurrentUser(),
@@ -110,6 +114,13 @@ describe.runIf(isLiveMode)('experiments created from a generated template (live)
         if (!after.archived) console.error(`template e2e: experiment ${id} not archived`);
       } catch (error) {
         console.error(`template e2e: cleanup of experiment ${id} failed: ${error}`);
+      }
+    }
+    if (mintedKeyId !== undefined) {
+      try {
+        await client.deleteUserApiKey(mintedKeyId);
+      } catch (error) {
+        console.error(`template e2e: deleting API key ${mintedKeyId} failed: ${error}`);
       }
     }
     rmSync(workDir, { recursive: true, force: true });
