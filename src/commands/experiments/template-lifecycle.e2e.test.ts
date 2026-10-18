@@ -100,7 +100,7 @@ describe.runIf(isLiveMode)('experiments created from a generated template (live)
     if (!metric) throw new Error('No unarchived metric on the live instance');
     guardrailName = metric.name;
     ownerEmail = user.email;
-  });
+  }, TIMEOUT);
 
   afterAll(async () => {
     for (const id of createdIds) {
