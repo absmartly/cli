@@ -12,11 +12,46 @@ jobs:
   live-test:
     name: Live API Tests
     runs-on: ubuntu-latest
-    # Every run writes to the same shared test instance; never run two at once.
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      actions: read
+    # Per ref, so a newer commit on the same ref queues behind the running job
+    # without cancelling runs for other PRs or merge-queue entries.
     concurrency:
-      group: live-api-tests
+      group: live-api-tests-${{ github.ref }}
       cancel-in-progress: false
     steps:
+      # Every run writes to the same shared test instance. A concurrency group
+      # keeps only one pending job and silently cancels the rest, so queue here
+      # instead: wait while any other live job that started earlier is running.
+      - name: Wait for earlier live runs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          live_jobs='.jobs[] | select(.name | endswith("Live API Tests")) | select(.status == "in_progress")'
+          mine=$(gh api "repos/$REPO/actions/runs/$RUN_ID/attempts/$RUN_ATTEMPT/jobs" \
+            --jq "[$live_jobs] | first | .started_at")
+          while :; do
+            busy=""
+            for run in $(gh api "repos/$REPO/actions/runs?status=in_progress&per_page=100" \
+                --jq ".workflow_runs[] | select(.id != $RUN_ID) | .id"); do
+              started=$(gh api "repos/$REPO/actions/runs/$run/jobs" --jq "[$live_jobs] | first | .started_at // empty")
+              # Earlier start wins; equal starts are ordered by run id.
+              if [ -n "$started" ] && { [[ "$started" < "$mine" ]] || { [ "$started" = "$mine" ] && [ "$run" -lt "$RUN_ID" ]; }; }; then
+                busy=$run
+                break
+              fi
+            done
+            [ -z "$busy" ] && break
+            echo "Waiting for live run $busy to finish"
+            sleep 30
+          done
+
       - name: Check live secrets
         env:
           LIVE_API_URL: ${{ secrets.LIVE_API_URL }}

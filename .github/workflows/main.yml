@@ -17,4 +17,7 @@ jobs:
     name: Live
     needs: ci
     uses: ./.github/workflows/_live-tests.yml
+    permissions:
+      contents: read
+      actions: read
     secrets: inherit
