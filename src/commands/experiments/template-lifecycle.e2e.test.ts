@@ -4,7 +4,6 @@ import { mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { createAPIClient } from '../../lib/api/client.js';
-import { deleteOAuthToken, setOAuthToken } from '../../lib/config/keyring.js';
 import { ExperimentId } from '../../api-client/types.js';
 import { isLiveMode, TEST_BASE_URL, TEST_API_KEY } from '../../test/helpers/test-config.js';
 
@@ -13,6 +12,7 @@ import { isLiveMode, TEST_BASE_URL, TEST_API_KEY } from '../../test/helpers/test
 // ABS_E2E_CLI at another build (e.g. a published release's bin) to compare.
 const CLI = (process.env.ABS_E2E_CLI ?? 'bun src/index.ts').split(' ');
 const TIMEOUT = 120_000;
+const COMMAND_TIMEOUT = 60_000;
 
 const client = createAPIClient(TEST_BASE_URL, TEST_API_KEY);
 const createdIds: ExperimentId[] = [];
@@ -37,10 +37,13 @@ function abs(...args: string[]): { stdout: string; stderr: string; status: numbe
     delete env.ABSMARTLY_API_KEY;
     delete env.ABSMARTLY_API_ENDPOINT;
   }
+  // spawnSync blocks the worker, so the Vitest timeout cannot interrupt a hung CLI.
   const result = spawnSync(cmd!, cliArgs, {
     encoding: 'utf8',
     env,
+    timeout: COMMAND_TIMEOUT,
   });
+  if (result.error) throw result.error;
   return { stdout: result.stdout, stderr: result.stderr, status: result.status };
 }
 
