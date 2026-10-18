@@ -294,7 +294,8 @@ export async function buildExperimentPayload(
     payload.analysis_type = analysisType;
     payload.required_alpha = template.required_alpha ?? DEFAULT_REQUIRED_ALPHA;
     payload.required_power = template.required_power ?? DEFAULT_REQUIRED_POWER;
-    payload.baseline_participants_per_day = template.baseline_participants ?? DEFAULT_BASELINE_PARTICIPANTS;
+    payload.baseline_participants_per_day =
+      template.baseline_participants ?? DEFAULT_BASELINE_PARTICIPANTS;
   }
 
   if (experimentType !== 'feature' && template.minimum_detectable_effect)
