@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { MAX_TEMPLATE_LENGTH, parseExperimentMarkdown } from './parser.js';
+import { generateTemplate } from './generator.js';
 import { allStrings } from '../../test/helpers/differential.js';
 import { bySize, expectLinear } from '../../test/helpers/timing.js';
 
@@ -29,7 +30,41 @@ percentage_of_traffic: 80
 `;
     const result = parseExperimentMarkdown(md);
     expect(result.display_name).toBe('My Experiment');
-    expect(result.percentage_of_traffic).toBe('80');
+    expect(result.percentage_of_traffic).toBe(80);
+  });
+
+  describe('percentage_of_traffic', () => {
+    const context = {
+      applications: [{ name: 'app' }],
+      unitTypes: [{ name: 'user_id' }],
+      metrics: [],
+    };
+
+    it.each(['test', 'feature'])('is a number in a generated %s template', (type) => {
+      const md = generateTemplate(context, { name: 'x', type });
+      const result = parseExperimentMarkdown(md);
+      expect(result.type).toBe(type);
+      expect(result.percentage_of_traffic).toBe(100);
+    });
+
+    it('keeps a number from frontmatter', () => {
+      expect(
+        parseExperimentMarkdown('---\npercentage_of_traffic: 25\n---\n').percentage_of_traffic
+      ).toBe(25);
+    });
+
+    it.each(['lots', '50.5', '-1', '101', '1e2', '0x10'])('rejects %j', (value) => {
+      const md = `## Traffic\n\npercentage_of_traffic: ${value}\n`;
+      expect(() => parseExperimentMarkdown(md)).toThrow(
+        /percentage_of_traffic must be a whole number/
+      );
+    });
+
+    it('rejects a non-numeric frontmatter value', () => {
+      expect(() => parseExperimentMarkdown('---\npercentage_of_traffic: all\n---\n')).toThrow(
+        /percentage_of_traffic must be a whole number/
+      );
+    });
   });
 
   it('should parse variants', () => {

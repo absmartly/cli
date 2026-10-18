@@ -277,10 +277,6 @@ export async function buildExperimentPayload(
     state: template.state ?? DEFAULT_STATE,
     percentage_of_traffic: template.percentage_of_traffic ?? DEFAULT_TRAFFIC,
     percentages: template.percentages ?? DEFAULT_PERCENTAGES,
-    analysis_type: analysisType,
-    required_alpha: template.required_alpha ?? DEFAULT_REQUIRED_ALPHA,
-    required_power: template.required_power ?? DEFAULT_REQUIRED_POWER,
-    baseline_participants_per_day: template.baseline_participants ?? DEFAULT_BASELINE_PARTICIPANTS,
     audience: DEFAULT_AUDIENCE,
     audience_strict: false,
     nr_variants: variants.length,
@@ -290,14 +286,26 @@ export async function buildExperimentPayload(
     experiment_tags: [],
   };
 
-  if (template.minimum_detectable_effect)
+  // Feature flags do not have experiment analysis settings. The feature form
+  // deliberately strips these fields before sending its payload; emitting the
+  // experiment defaults here makes the backend reject template-created flags
+  // (notably the group-sequential interval fields) with HTTP 500.
+  if (experimentType !== 'feature') {
+    payload.analysis_type = analysisType;
+    payload.required_alpha = template.required_alpha ?? DEFAULT_REQUIRED_ALPHA;
+    payload.required_power = template.required_power ?? DEFAULT_REQUIRED_POWER;
+    payload.baseline_participants_per_day =
+      template.baseline_participants ?? DEFAULT_BASELINE_PARTICIPANTS;
+  }
+
+  if (experimentType !== 'feature' && template.minimum_detectable_effect)
     payload.minimum_detectable_effect = template.minimum_detectable_effect;
-  if (template.baseline_primary_metric_mean)
+  if (experimentType !== 'feature' && template.baseline_primary_metric_mean)
     payload.baseline_primary_metric_mean = template.baseline_primary_metric_mean;
-  if (template.baseline_primary_metric_stdev)
+  if (experimentType !== 'feature' && template.baseline_primary_metric_stdev)
     payload.baseline_primary_metric_stdev = template.baseline_primary_metric_stdev;
 
-  if (analysisType === 'group_sequential') {
+  if (experimentType !== 'feature' && analysisType === 'group_sequential') {
     payload.group_sequential_futility_type =
       template.group_sequential_futility_type ?? DEFAULT_FUTILITY_TYPE;
     if (template.group_sequential_analysis_count)
@@ -338,7 +346,20 @@ export async function buildExperimentPayload(
     exploratory: resolveMetricNames(template.exploratory_metrics, 'Exploratory metric'),
   });
 
-  if (allMetrics.length > 0) {
+  if (experimentType === 'feature') {
+    const metrics = template.primary_metric
+      ? [resolveByName(context.metrics, template.primary_metric, 'Metric'), ...allMetrics]
+      : allMetrics;
+    const ids = [
+      ...new Set(metrics.map((metric) => ('metric_id' in metric ? metric.metric_id : metric.id))),
+    ];
+    payload.primary_metric = { metric_id: null };
+    payload.secondary_metrics = ids.map((metric_id, order_index) => ({
+      metric_id,
+      type: 'guardrail',
+      order_index,
+    }));
+  } else if (allMetrics.length > 0) {
     payload.secondary_metrics = allMetrics;
   }
 
