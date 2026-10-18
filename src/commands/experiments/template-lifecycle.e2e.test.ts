@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { createAPIClient } from '../../lib/api/client.js';
+import { deleteOAuthToken, setOAuthToken } from '../../lib/config/keyring.js';
 import { ExperimentId } from '../../api-client/types.js';
 import { isLiveMode, TEST_BASE_URL, TEST_API_KEY } from '../../test/helpers/test-config.js';
 
@@ -18,16 +19,27 @@ const createdIds: ExperimentId[] = [];
 let workDir: string;
 
 function abs(...args: string[]): { stdout: string; stderr: string; status: number | null } {
-  if (typeof TEST_API_KEY !== 'string') throw new Error('template e2e needs an API key profile');
   const [cmd, ...cmdArgs] = CLI;
-  const result = spawnSync(cmd!, [...cmdArgs, ...args], {
+  const liveProfile = process.env.LIVE_PROFILE;
+  const cliArgs = liveProfile
+    ? [...cmdArgs, '--profile', liveProfile, ...args]
+    : [...cmdArgs, ...args];
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    NO_COLOR: '1',
+  };
+  if (typeof TEST_API_KEY === 'string') {
+    env.ABSMARTLY_API_KEY = TEST_API_KEY;
+    env.ABSMARTLY_API_ENDPOINT = TEST_BASE_URL;
+  } else {
+    // OAuth live profiles are resolved by the child CLI from the same profile
+    // and keyring token as the test runner; do not coerce AuthConfig to a key.
+    delete env.ABSMARTLY_API_KEY;
+    delete env.ABSMARTLY_API_ENDPOINT;
+  }
+  const result = spawnSync(cmd!, cliArgs, {
     encoding: 'utf8',
-    env: {
-      ...process.env,
-      ABSMARTLY_API_ENDPOINT: TEST_BASE_URL,
-      ABSMARTLY_API_KEY: TEST_API_KEY,
-      NO_COLOR: '1',
-    },
+    env,
   });
   return { stdout: result.stdout, stderr: result.stderr, status: result.status };
 }
