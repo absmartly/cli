@@ -1005,7 +1005,9 @@ abs users list --sort email --asc                     # sort by a field
 abs users list --ids 1,2,3                             # filter by user IDs
 abs users get 123
 abs users create --email user@example.com --name "Jane Doe"
+abs users create --email user@example.com --name "Jane Doe" --role User   # role name(s) or ID(s), comma-separated
 abs users update 123 --name "Jane Smith"
+abs users update 123 --role FullAdmin,2                # replaces the user's global-team roles
 abs users archive 123
 abs users archive 123 --unarchive
 

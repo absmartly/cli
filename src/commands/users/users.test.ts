@@ -301,6 +301,37 @@ describe('users command', () => {
     });
   });
 
+  it('should send resolved roles when creating with --role', async () => {
+    vi.mocked(mockClient.listRoles).mockResolvedValueOnce([{ id: 3, name: 'User' }] as any);
+
+    await usersCommand.parseAsync([
+      'node',
+      'test',
+      'create',
+      '--email',
+      'j@t.com',
+      '--name',
+      'John Doe',
+      '--role',
+      'User',
+    ]);
+
+    expect(mockClient.createUser).toHaveBeenCalledWith({
+      email: 'j@t.com',
+      first_name: 'John',
+      last_name: 'Doe',
+      roles: [{ role_id: 3 }],
+    });
+  });
+
+  it('should accept --role as the only update field', async () => {
+    vi.mocked(mockClient.listRoles).mockResolvedValueOnce([{ id: 1, name: 'FullAdmin' }] as any);
+
+    await usersCommand.parseAsync(['node', 'test', 'update', '171', '--role', 'FullAdmin']);
+
+    expect(mockClient.updateUser).toHaveBeenCalledWith(171, { roles: [{ role_id: 1 }] });
+  });
+
   it('should update a user', async () => {
     await usersCommand.parseAsync(['node', 'test', 'update', '1', '--name', 'Jane Smith']);
 
