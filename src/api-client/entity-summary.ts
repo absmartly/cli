@@ -318,3 +318,26 @@ export function summarizeWebhookRow(w: Record<string, unknown>): Record<string, 
     updated_by: formatOwner(w.updated_by as Record<string, unknown> | undefined),
   };
 }
+
+/**
+ * Replace a role's raw `permissions` array (`[{ permission: { name, category_id } }]`)
+ * with a map of category NAME -> comma-separated permission names. Unknown
+ * categories fall back to `category <id>`. Use `--raw` for the original payload.
+ */
+export function groupRolePermissions(
+  role: Record<string, unknown>,
+  categories: Array<{ id: number; name: string }>
+): Record<string, unknown> {
+  if (!Array.isArray(role.permissions)) return role;
+  const names = new Map(categories.map((c) => [Number(c.id), c.name]));
+  const grouped: Record<string, string[]> = {};
+  for (const entry of role.permissions as Array<Record<string, unknown>>) {
+    const perm = (entry.permission ?? entry) as Record<string, unknown>;
+    const cat = names.get(Number(perm.category_id)) ?? `category ${perm.category_id}`;
+    (grouped[cat] ??= []).push(String(perm.name));
+  }
+  const permissions = Object.fromEntries(
+    Object.entries(grouped).map(([k, v]) => [k, v.join(', ')])
+  );
+  return { ...role, permissions };
+}

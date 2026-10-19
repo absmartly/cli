@@ -324,6 +324,66 @@ describe('users command', () => {
     });
   });
 
+  it('should resolve comma-separated role names with spaces and ids', async () => {
+    vi.mocked(mockClient.listRoles)
+      .mockResolvedValueOnce([{ id: 7, name: 'Base user' }] as any) // ids lookup
+      .mockResolvedValueOnce([{ id: 7, name: 'Base user' }] as any); // name lookup
+    await usersCommand.parseAsync([
+      'node',
+      'test',
+      'create',
+      '--email',
+      'j@t.com',
+      '--name',
+      'John Doe',
+      '--role',
+      '7, Base user',
+    ]);
+    expect(mockClient.createUser).toHaveBeenCalledWith(
+      expect.objectContaining({ roles: [{ role_id: 7 }] })
+    );
+  });
+
+  it('prefers the exact-case role name when names differ only by case', async () => {
+    vi.mocked(mockClient.listRoles).mockResolvedValueOnce([
+      { id: 114, name: 'Base User' },
+      { id: 116, name: 'Base user' },
+    ] as any);
+    await usersCommand.parseAsync([
+      'node',
+      'test',
+      'create',
+      '--email',
+      'j@t.com',
+      '--name',
+      'John Doe',
+      '--role',
+      'Base user',
+    ]);
+    expect(mockClient.createUser).toHaveBeenCalledWith(
+      expect.objectContaining({ roles: [{ role_id: 116 }] })
+    );
+  });
+
+  it('should generate and print a password with --with-password', async () => {
+    (mockClient as any).resetUserPassword = vi.fn().mockResolvedValue({ password: 'init-pw-1' });
+    vi.mocked(mockClient.createUser).mockResolvedValueOnce({ id: 55 } as any);
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    await usersCommand.parseAsync([
+      'node',
+      'test',
+      'create',
+      '--email',
+      'j@t.com',
+      '--name',
+      'John Doe',
+      '--with-password',
+    ]);
+    expect((mockClient as any).resetUserPassword).toHaveBeenCalledWith(55);
+    expect(log.mock.calls.flat().join(' ')).toContain('init-pw-1');
+    log.mockRestore();
+  });
+
   it('should accept --role as the only update field', async () => {
     vi.mocked(mockClient.listRoles).mockResolvedValueOnce([{ id: 1, name: 'FullAdmin' }] as any);
 

@@ -3,12 +3,18 @@ import chalk from 'chalk';
 import {
   getAPIClientFromOptions,
   getGlobalOptions,
-  printResult,
+  printFormatted,
   withErrorHandling,
 } from '../../lib/utils/api-helper.js';
 import { parseUserId } from '../../lib/utils/validators.js';
 import type { UserId } from '../../lib/api/branded-types.js';
 import { resetUserPassword } from '../../core/users/reset-password.js';
+
+export function printPasswordNotice(message: string, password: string): void {
+  console.log(chalk.green(`✓ ${message}`));
+  console.log(`  New password: ${password}`);
+  console.log(chalk.yellow('  Save this password — it cannot be retrieved later.'));
+}
 
 export const resetPasswordCommand = new Command('reset-password')
   .description('Reset a user password')
@@ -21,15 +27,21 @@ export const resetPasswordCommand = new Command('reset-password')
       const result = await resetUserPassword(client, { id });
       const format = globalOptions.output ?? 'table';
       if (format === 'table' || format === 'rendered') {
-        console.log(chalk.green(`✓ Password reset for user ${id}`));
-        console.log(`  New password: ${result.data.password}`);
-        console.log(chalk.yellow('  Save this password — it cannot be retrieved later.'));
+        printPasswordNotice(`Password reset for user ${id}`, result.data.password);
+      } else if (format === 'ids') {
+        console.log(id);
       } else {
-        printResult(globalOptions, {
-          message: `✓ Password reset for user ${id}`,
-          id,
-          raw: result.data,
-        });
+        // Structured/plain formats: the password is the point of this command,
+        // so include it in the payload (not only under --raw).
+        printFormatted(
+          {
+            success: true,
+            message: `Password reset for user ${id}`,
+            id,
+            password: result.data.password,
+          },
+          globalOptions
+        );
       }
     })
   );
