@@ -1006,6 +1006,7 @@ abs users list --ids 1,2,3                             # filter by user IDs
 abs users get 123
 abs users create --email user@example.com --name "Jane Doe"
 abs users create --email user@example.com --name "Jane Doe" --role User   # role name(s) or ID(s), comma-separated
+abs users create --email user@example.com --name "Jane Doe" --with-password  # also generate + print an initial password (POST /users returns none)
 abs users update 123 --name "Jane Smith"
 abs users update 123 --role FullAdmin,2                # replaces the user's global-team roles
 abs users archive 123
@@ -1024,7 +1025,7 @@ abs users list --department anc --contains                  # substring match (c
 # the API has no server-side department/role filter, so client filters scan all
 # users (200/page) and paginate the matched set.
 
-# Reset password
+# Reset password (prints the new password; also included in -o json/yaml output)
 abs users reset-password 123
 
 # User API keys
@@ -1120,7 +1121,7 @@ Aliases: `roles`, `role`
 
 ```bash
 abs roles list
-abs roles get 1
+abs roles get 1                      # permissions shown grouped by category name (--raw for the API payload)
 abs roles create --name "Editor"
 abs roles update 1 --description "Can edit experiments"
 abs roles delete 1

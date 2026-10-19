@@ -10,7 +10,7 @@ import { parseRoleId } from '../../lib/utils/validators.js';
 import { createListCommand } from '../../lib/utils/list-command.js';
 import type { RoleId } from '../../lib/api/branded-types.js';
 import { getRole, createRole, updateRole, deleteRole } from '../../core/roles/index.js';
-import { summarizeNamedEntityRow } from '../../api-client/entity-summary.js';
+import { summarizeNamedEntityRow, groupRolePermissions } from '../../api-client/entity-summary.js';
 
 export const rolesCommand = new Command('roles').alias('role').description('Role commands');
 
@@ -37,7 +37,17 @@ const getCommand = new Command('get')
       const globalOptions = getGlobalOptions(getCommand);
       const client = await getAPIClientFromOptions(globalOptions);
       const result = await getRole(client, { id });
-      printFormatted(result.data, globalOptions);
+      if (globalOptions.raw) {
+        printFormatted(result.data, globalOptions);
+        return;
+      }
+      const categories = await client
+        .listPermissionCategories({ items: 500 })
+        .catch(() => [] as Array<{ id: number; name: string }>);
+      printFormatted(
+        groupRolePermissions(result.data as Record<string, unknown>, categories),
+        globalOptions
+      );
     })
   );
 

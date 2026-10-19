@@ -34,6 +34,7 @@ import {
   updateUser as coreUpdateUser,
   archiveUser as coreArchiveUser,
 } from '../../core/users/index.js';
+import { resetUserPassword } from '../../core/users/reset-password.js';
 import {
   parseRequiredFilterValues,
   hasClientFilters,
@@ -44,7 +45,7 @@ import {
   formatUserRoles,
   type UserClientFilters,
 } from '../../core/users/filter.js';
-import { resetPasswordCommand } from './reset-password.js';
+import { resetPasswordCommand, printPasswordNotice } from './reset-password.js';
 import { userApiKeysCommand } from './api-keys.js';
 
 export const usersCommand = new Command('users').alias('user').description('User commands');
@@ -340,6 +341,10 @@ const createCommand = new Command('create')
   .requiredOption('--email <email>', 'user email')
   .requiredOption('--name <name>', 'user full name')
   .option('--role <roles>', 'global-team role name(s) or ID(s) (comma-separated)')
+  .option(
+    '--with-password',
+    'also generate and print an initial password (the API does not return one on create)'
+  )
   .action(
     withErrorHandling(async (options) => {
       const globalOptions = getGlobalOptions(createCommand);
@@ -351,8 +356,25 @@ const createCommand = new Command('create')
         role: options.role,
       });
 
+      const message = `✓ User created with ID: ${result.data.id}`;
+      if (options.withPassword) {
+        const pw = await resetUserPassword(client, { id: result.data.id as UserId });
+        const format = globalOptions.output ?? 'table';
+        if (format === 'table' || format === 'rendered') {
+          printPasswordNotice(`User created with ID: ${result.data.id}`, pw.data.password);
+        } else if (format === 'ids') {
+          console.log(result.data.id);
+        } else {
+          printFormatted(
+            { success: true, message, id: result.data.id, password: pw.data.password },
+            globalOptions
+          );
+        }
+        return;
+      }
+
       printResult(globalOptions, {
-        message: `✓ User created with ID: ${result.data.id}`,
+        message,
         id: result.data.id,
         raw: result.data,
       });

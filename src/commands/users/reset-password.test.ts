@@ -55,6 +55,22 @@ describe('reset-password command', () => {
     expect(output).toContain('42');
   });
 
+  it('prints the new password by default', async () => {
+    mockClient.resetUserPassword.mockResolvedValue({ password: 'new-pass-123' });
+    await resetPasswordCommand.parseAsync(['node', 'test', '42']);
+    expect(consoleSpy.mock.calls.flat().join(' ')).toContain('new-pass-123');
+  });
+
+  it('includes the password in structured output without --raw', async () => {
+    vi.mocked(getGlobalOptions).mockReturnValue({ output: 'json', outputExplicit: true } as any);
+    mockClient.resetUserPassword.mockResolvedValue({ password: 'new-pass-123' });
+    await resetPasswordCommand.parseAsync(['node', 'test', '42']);
+    expect(printFormatted).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 42, password: 'new-pass-123' }),
+      expect.anything()
+    );
+  });
+
   it('should reject invalid user ID', async () => {
     await expect(resetPasswordCommand.parseAsync(['node', 'test', 'abc'])).rejects.toThrow();
     expect(mockClient.resetUserPassword).not.toHaveBeenCalled();
