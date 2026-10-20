@@ -144,7 +144,6 @@ export class AxiosHttpClient implements HttpClient {
   private readonly showRequest: boolean;
   private readonly showResponse: boolean;
   private readonly curl: boolean;
-  private readonly dryRun: boolean;
   private readonly formatOpts: FormatOptions;
   private seenFingerprints: Set<string> = new Set();
   private suppressedCount = 0;
@@ -155,7 +154,7 @@ export class AxiosHttpClient implements HttpClient {
     this.showRequest = options.showRequest ?? false;
     this.showResponse = options.showResponse ?? false;
     this.curl = options.curl ?? false;
-    this.dryRun = options.dryRun ?? false;
+    const dryRun = options.dryRun ?? false;
     this.formatOpts = {
       showSecrets: options.showSecrets ?? false,
       omitBody: options.headersOnly ?? false,
@@ -207,7 +206,7 @@ export class AxiosHttpClient implements HttpClient {
     // Registered first on purpose: axios runs request interceptors in reverse
     // registration order, so the logging interceptors below run before this
     // one and --show-request/--curl still print the request that gets blocked.
-    if (this.dryRun) {
+    if (dryRun) {
       this.client.interceptors.request.use((config) => {
         const method = (config.method ?? 'GET').toUpperCase();
         const url = config.url ?? '';
