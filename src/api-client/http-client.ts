@@ -30,3 +30,15 @@ export class APIError extends Error {
     if (response !== undefined) this.response = response;
   }
 }
+
+export class DryRunError extends Error {
+  readonly method: string;
+  readonly url: string;
+
+  constructor(method: string, url: string) {
+    super(`Dry run: ${method} ${url} — request not sent`);
+    this.name = 'DryRunError';
+    this.method = method;
+    this.url = url;
+  }
+}

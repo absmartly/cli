@@ -176,6 +176,237 @@ describe('AxiosHttpClient request/response logging', () => {
     });
   });
 
+  describe('dryRun', () => {
+    it('rejects a mutating PUT with DryRunError and never hits the network', async () => {
+      let networkHit = false;
+      mswServer.use(
+        http.put(`${BASE_URL}/experiments/1/stop`, () => {
+          networkHit = true;
+          return HttpResponse.json({ ok: true, experiment: { id: 1 } });
+        })
+      );
+
+      const client = new AxiosHttpClient(BASE_URL, 'secret-key', { dryRun: true });
+
+      await expect(
+        client.request({ method: 'PUT', url: '/experiments/1/stop', data: { reason: 'testing' } })
+      ).rejects.toMatchObject({ name: 'DryRunError', method: 'PUT', url: '/experiments/1/stop' });
+      expect(networkHit).toBe(false);
+    });
+
+    it('rejects a mutating POST with DryRunError', async () => {
+      let networkHit = false;
+      mswServer.use(
+        http.post(`${BASE_URL}/experiments`, () => {
+          networkHit = true;
+          return HttpResponse.json({ id: 1 }, { status: 201 });
+        })
+      );
+
+      const client = new AxiosHttpClient(BASE_URL, 'secret-key', { dryRun: true });
+
+      await expect(
+        client.request({ method: 'POST', url: '/experiments', data: { name: 'x' } })
+      ).rejects.toMatchObject({ name: 'DryRunError', method: 'POST', url: '/experiments' });
+      expect(networkHit).toBe(false);
+    });
+
+    it('does not block GET requests', async () => {
+      mswServer.use(http.get(`${BASE_URL}/experiments/1`, () => HttpResponse.json({ id: 1 })));
+
+      const client = new AxiosHttpClient(BASE_URL, 'secret-key', { dryRun: true });
+      const response = await client.request({ method: 'GET', url: '/experiments/1' });
+
+      expect(response.status).toBe(200);
+    });
+
+    it('does not block allowlisted read-only POST endpoints (e.g. datasource test)', async () => {
+      mswServer.use(
+        http.post(`${BASE_URL}/datasources/test`, () => HttpResponse.json({ ok: true, errors: [] }))
+      );
+
+      const client = new AxiosHttpClient(BASE_URL, 'secret-key', { dryRun: true });
+      const response = await client.request({
+        method: 'POST',
+        url: '/datasources/test',
+        data: { type: 'postgres' },
+      });
+
+      expect(response.status).toBe(200);
+    });
+
+    it('does not block POST /datasources/:id/json_layouts/preview (suffix match)', async () => {
+      mswServer.use(
+        http.post(`${BASE_URL}/datasources/123/json_layouts/preview`, () =>
+          HttpResponse.json({ ok: true })
+        )
+      );
+
+      const client = new AxiosHttpClient(BASE_URL, 'secret-key', { dryRun: true });
+      const response = await client.request({
+        method: 'POST',
+        url: '/datasources/123/json_layouts/preview',
+        data: {},
+      });
+
+      expect(response.status).toBe(200);
+    });
+
+    it('does not block POST /storage_configs/test (read-only connection test)', async () => {
+      mswServer.use(
+        http.post(`${BASE_URL}/storage_configs/test`, () => HttpResponse.json({ ok: true }))
+      );
+
+      const client = new AxiosHttpClient(BASE_URL, 'secret-key', { dryRun: true });
+      const response = await client.request({
+        method: 'POST',
+        url: '/storage_configs/test',
+        data: {},
+      });
+
+      expect(response.status).toBe(200);
+    });
+
+    it('still blocks DELETE to an allowlisted POST path (path reuse is method-specific)', async () => {
+      let networkHit = false;
+      mswServer.use(
+        http.delete(`${BASE_URL}/events/unit_data`, () => {
+          networkHit = true;
+          return HttpResponse.json({ ok: true });
+        })
+      );
+
+      const client = new AxiosHttpClient(BASE_URL, 'secret-key', { dryRun: true });
+
+      await expect(
+        client.request({ method: 'DELETE', url: '/events/unit_data', data: { units: [] } })
+      ).rejects.toMatchObject({ name: 'DryRunError' });
+      expect(networkHit).toBe(false);
+    });
+
+    it.each([
+      '/experiments?x=/events',
+      '/experiments/1/foo/events',
+      '/datasources/123/json_layouts/create',
+      '/experiments#/events',
+    ])('blocks POST %s (allowlist is anchored on the pathname)', async (url) => {
+      const client = new AxiosHttpClient(BASE_URL, 'secret-key', { dryRun: true });
+      await expect(client.request({ method: 'POST', url, data: {} })).rejects.toMatchObject({
+        name: 'DryRunError',
+        method: 'POST',
+        url,
+      });
+    });
+
+    it.each(['/events?take=10', '/statistics/power/plan/matrix', '/events/history'])(
+      'allows POST %s',
+      async (url) => {
+        const path = url.split('?')[0];
+        mswServer.use(http.post(`${BASE_URL}${path}`, () => HttpResponse.json({ ok: true })));
+        const client = new AxiosHttpClient(BASE_URL, 'secret-key', { dryRun: true });
+        const response = await client.request({ method: 'POST', url, data: {} });
+        expect(response.status).toBe(200);
+      }
+    );
+
+    it('still logs the request via --show-request before rejecting', async () => {
+      const stderr = captureStderr();
+      try {
+        const client = new AxiosHttpClient(BASE_URL, 'secret-key', {
+          dryRun: true,
+          showRequest: true,
+        });
+
+        await expect(
+          client.request({ method: 'PUT', url: '/experiments/1/stop', data: { reason: 'x' } })
+        ).rejects.toMatchObject({ name: 'DryRunError' });
+
+        const out = stderr.calls.join('');
+        expect(out).toContain('→ PUT');
+        expect(out).toContain(`${BASE_URL}/experiments/1/stop`);
+      } finally {
+        stderr.restore();
+      }
+    });
+
+    it('redacts sensitive query values in the dry-run error unless showSecrets is set', async () => {
+      const client = new AxiosHttpClient(BASE_URL, 'secret-key', { dryRun: true });
+
+      const err = await client
+        .request({ method: 'DELETE', url: '/experiments/42?access_token=REVIEW_SENTINEL' })
+        .catch((e: unknown) => e);
+
+      expect(err).toMatchObject({ name: 'DryRunError', method: 'DELETE' });
+      const { message, url } = err as { message: string; url: string };
+      expect(message).not.toContain('REVIEW_SENTINEL');
+      expect(url).not.toContain('REVIEW_SENTINEL');
+      expect(message).toContain('/experiments/42');
+    });
+
+    it('keeps the full URL in the dry-run error when showSecrets is set', async () => {
+      const client = new AxiosHttpClient(BASE_URL, 'secret-key', {
+        dryRun: true,
+        showSecrets: true,
+      });
+
+      await expect(
+        client.request({ method: 'DELETE', url: '/experiments/42?access_token=REVIEW_SENTINEL' })
+      ).rejects.toMatchObject({
+        message: expect.stringContaining('access_token=REVIEW_SENTINEL'),
+      });
+    });
+
+    it('still classifies on the raw URL: a sensitive query on a read-only POST path is allowed', async () => {
+      mswServer.use(
+        http.post(`${BASE_URL}/events`, () => HttpResponse.json({ events: [] }, { status: 200 }))
+      );
+      const client = new AxiosHttpClient(BASE_URL, 'secret-key', { dryRun: true });
+
+      const response = await client.request({
+        method: 'POST',
+        url: '/events?access_token=REVIEW_SENTINEL',
+        data: {},
+      });
+
+      expect(response.status).toBe(200);
+    });
+
+    it('does not print a "non-HTTP error" line under --show-response', async () => {
+      const stderr = captureStderr();
+      try {
+        const client = new AxiosHttpClient(BASE_URL, 'secret-key', {
+          dryRun: true,
+          showResponse: true,
+        });
+
+        await expect(
+          client.request({ method: 'PUT', url: '/experiments/1/stop', data: { reason: 'x' } })
+        ).rejects.toMatchObject({ name: 'DryRunError' });
+
+        expect(stderr.calls.join('')).not.toContain('non-HTTP error');
+      } finally {
+        stderr.restore();
+      }
+    });
+
+    it('does not trigger axios-retry (no retry attempts, error surfaces immediately)', async () => {
+      let attempts = 0;
+      mswServer.use(
+        http.put(`${BASE_URL}/experiments/1/stop`, () => {
+          attempts++;
+          return HttpResponse.json({ ok: true });
+        })
+      );
+
+      const client = new AxiosHttpClient(BASE_URL, 'secret-key', { dryRun: true });
+
+      await expect(
+        client.request({ method: 'PUT', url: '/experiments/1/stop', data: {} })
+      ).rejects.toMatchObject({ name: 'DryRunError' });
+      expect(attempts).toBe(0);
+    });
+  });
+
   describe('retries', () => {
     it('fires the request logger on every retry attempt', async () => {
       let calls = 0;

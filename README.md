@@ -138,15 +138,28 @@ These flags write to **stderr** (so they don't pollute piped stdout) and respect
 | `--show-request` | Print outgoing HTTP requests as a readable HTTP-style block. |
 | `--show-response` | Print HTTP responses (success and error) as an HTTP-style block. |
 | `--curl` | Print outgoing requests as runnable curl commands. |
+| `--dry-run` | Preview the request without sending it. Implies `--show-request` unless `--curl` is set. |
 | `--show-secrets` | Don't redact `Authorization` / `Set-Cookie` / sensitive body fields. Use with care. |
 | `--headers-only` | Omit request and response bodies from `--show-request` / `--show-response` / `--curl` output. |
 | `--status-only` | Print only the response status line, e.g. `← 200 OK (175ms)`. Implies `--show-response`. |
 
 When stderr is a TTY, JSON bodies and HTTP headers are pretty-printed and syntax-highlighted. Polling loops that fire the same request repeatedly are deduped: each unique request is printed once and a `(N identical requests suppressed)` summary appears when the next distinct request arrives. Responses are always logged so that state transitions during polling stay visible.
 
+`--dry-run` is a global flag that works on any command. It short-circuits mutating requests at the HTTP layer — a blocked request is never sent to the API — and by default behaves as if `--show-request` were also set, so you see exactly what would have gone out. It composes with the other flags (for example `--curl` or `--show-secrets`). Every non-GET request is blocked, with one exception: read-only POST endpoints are still sent, along with all GET requests, so a command may still read from the API and print normal output to stdout. The read-only POSTs are event search (`/events`, `/events/history`, `/events/unit_data`, `/events/json_values`, `/events/json_layouts`), datasource test/introspect/validate/preview (`/datasources/test`, `/datasources/introspect`, `/datasources/validate_query`, `/datasources/preview_query`), JSON layout preview (`/datasources/<id>/json_layouts/preview`), the power-analysis matrix (`/statistics/power/plan/matrix`) and storage-config test (`/storage_configs/test`); the source of truth is `DRY_RUN_SAFE_POST_PATTERNS` in `src/lib/api/axios-adapter.ts`. `--dry-run` covers API calls only — local actions such as writing config files are not previewed. For blocked requests, the request block and a one-line `Dry run: ...` confirmation are both written to **stderr** and nothing is written to stdout, so pipes (`abs experiments list | abs experiments stop --dry-run | ...`) and `-o json` consumers are safe.
+
+Limits:
+
+- Commands that chain several mutating requests (for example `metrics create --activate`, `metrics create --new-version --activate`, `metrics version --activate`) preview only the **first** request; the follow-up activate call is not shown.
+- `experiments clone --dry-run` still downloads variant screenshots into `./.screenshots/` (a local write).
+- `auth login` refuses `--dry-run` (it would create and delete API keys and store credentials), exiting with `auth login does not support --dry-run`.
+
+Changed: `experiments create --as-curl` was removed — use `--dry-run --curl` instead. Authorization is redacted by default; add `--show-secrets` to include the real key, e.g. `abs experiments create ... --dry-run --curl --show-secrets`, then copy the printed curl command from stderr (without the leading `$ `). Don't redirect stderr straight into a script: it also contains the `Dry run: ...` confirmation line, which is not shell input. The per-command `--dry-run` payload dump on stdout was replaced by the HTTP request block plus a one-line confirmation, both on stderr.
+
 Examples:
 
 ```bash
+abs experiments stop 1816 --reason other --dry-run     # preview the PUT, nothing sent
+abs experiments create --name x --dry-run --curl       # preview as a runnable curl command
 abs experiments get 1816 --show-request --show-response
 abs experiments list --curl                            # paste-runnable curl
 abs experiments get 1816 --show-response --status-only # just `← 200 OK (...)`
@@ -213,8 +226,8 @@ abs experiments create --name my-experiment --analysis-type fixed_horizon
 abs experiments create --name my-experiment --hypothesis "We believe X"  # custom fields
 abs experiments create --name my-experiment --field "Hypothesis=We believe X"  # generic fallback
 abs experiments create --from-file experiment.md         # from template
-abs experiments create --name my-experiment --dry-run    # preview payload
-abs experiments create --name my-experiment --as-curl    # output as curl command
+abs experiments create --name my-experiment --dry-run    # preview the request (stderr)
+abs experiments create --name my-experiment --dry-run --curl  # preview as curl command
 cat template.md | abs experiments create --from-file -   # from stdin
 
 # Clone an experiment
@@ -356,6 +369,7 @@ abs experiments bulk archive 123 456 --yes
 abs experiments bulk full-on 123 --variant 1 --note "Winner confirmed"
 abs experiments bulk development 123 456 --note "Moving to dev"
 abs experiments bulk stop --state running --app my-app --note "Maintenance"
+abs experiments bulk stop 123 456 --reason other --dry-run   # preview every PUT, nothing sent
 
 # Unix pipe composition
 # List outputs IDs when piped; action commands read IDs from stdin and pass them through
@@ -1501,7 +1515,7 @@ abs experiments get 123 -o template --screenshots-dir ./screenshots      # save 
 
 # Create from template
 abs experiments create --from-file experiment.md
-abs experiments create --from-file experiment.md --dry-run   # preview payload
+abs experiments create --from-file experiment.md --dry-run   # preview the request (stderr)
 cat experiment.md | abs experiments create --from-file -     # from stdin
 
 # Update from template
