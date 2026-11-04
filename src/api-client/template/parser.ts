@@ -209,7 +209,18 @@ function parseVariants(content: string): VariantTemplate[] {
     };
 
     const lines = variantContent.split('\n');
-    for (const line of lines) {
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i]!;
+      const configKey = matchVariantKeyValue(line);
+      if (configKey && configKey[0].toLowerCase() === 'config') {
+        const block = readConfigBlock(lines, i, configKey[1].trim(), variantNum);
+        if (block) {
+          variant.config = block.config;
+          i = block.lastLine;
+          continue;
+        }
+      }
+
       const imageMatch = /^!\[([^\]]*)\]\((.+)\)$/.exec(line.trim());
       if (imageMatch) {
         const alt = imageMatch[1] ?? '';
@@ -242,6 +253,81 @@ function parseVariants(content: string): VariantTemplate[] {
   }
 
   return variants;
+}
+
+/**
+ * Reads a variant `config:` value that spans more than one line, either as a
+ * fenced code block on the lines after an empty `config:`, or as a bare JSON
+ * object/array that opens on the `config:` line and closes on a later one.
+ * Returns undefined when the value is a normal single-line config (or absent),
+ * so the caller falls back to single-line handling.
+ */
+function readConfigBlock(
+  lines: string[],
+  keyLine: number,
+  value: string,
+  variantNum: number
+): { config: string; lastLine: number } | undefined {
+  if (value === '') {
+    let fenceLine = keyLine + 1;
+    while (fenceLine < lines.length && lines[fenceLine]!.trim() === '') fenceLine++;
+    if (fenceLine >= lines.length || !lines[fenceLine]!.trim().startsWith('```')) {
+      return undefined;
+    }
+    for (let end = fenceLine + 1; end < lines.length; end++) {
+      if (lines[end]!.trim() === '```') {
+        return {
+          config: lines
+            .slice(fenceLine + 1, end)
+            .join('\n')
+            .trim(),
+          lastLine: end,
+        };
+      }
+    }
+    throw new Error(`Template variant_${variantNum}: config code fence is not closed`);
+  }
+
+  if (value[0] !== '{' && value[0] !== '[') return undefined;
+  const closing = findJsonValueEnd([value, ...lines.slice(keyLine + 1)]);
+  if (closing === 0) return undefined;
+  // Unbalanced: keep everything to the end of the variant so the payload
+  // builder reports the invalid JSON with the variant's name.
+  const lastLine = closing === -1 ? lines.length - 1 : keyLine + closing;
+  return {
+    config: [value, ...lines.slice(keyLine + 1, lastLine + 1)].join('\n').trim(),
+    lastLine,
+  };
+}
+
+/**
+ * Index of the line on which the JSON object/array starting at the beginning
+ * of `lines[0]` closes, or -1 if it never does. Brackets inside strings are
+ * ignored.
+ */
+function findJsonValueEnd(lines: string[]): number {
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let n = 0; n < lines.length; n++) {
+    const line = lines[n]!;
+    for (let c = 0; c < line.length; c++) {
+      const ch = line.charAt(c);
+      if (inString) {
+        if (escaped) escaped = false;
+        else if (ch === '\\') escaped = true;
+        else if (ch === '"') inString = false;
+      } else if (ch === '"') {
+        inString = true;
+      } else if (ch === '{' || ch === '[') {
+        depth++;
+      } else if (ch === '}' || ch === ']') {
+        depth--;
+        if (depth === 0) return n;
+      }
+    }
+  }
+  return -1;
 }
 
 function parseCustomFields(content: string): Record<string, string> {

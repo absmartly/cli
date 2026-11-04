@@ -1606,6 +1606,7 @@ Template features:
 - **Owners**: `Name <email>`, email, or user ID
 - **Teams/tags**: resolved by name
 - **Audience**: JSON code block, parsed and compacted for the API
+- **Variant config**: one line (`config: {"a": 1}`), a JSON object/array that spans several lines after `config: {`, or an empty `config:` followed by a ```` ```json ```` code block. The value is validated and compacted for the API
 - **Custom fields**: grouped by section name (matches UI sections)
 - **User-type fields**: exported as email, converted back to `{"selected":[{"userId":N}]}`
 - **Screenshots**: local file paths, URLs, or base64 data URIs
