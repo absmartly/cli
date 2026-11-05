@@ -383,7 +383,11 @@ const createCommand = new Command('create')
           const reason = error instanceof Error ? error.message : String(error);
           throw new Error(
             `User created with ID: ${id}, but generating a password failed: ${reason}\n` +
-              `Run: ${recoveryCommand(globalOptions, `users reset-password ${id}`)}`
+              `Run: ${recoveryCommand(globalOptions, `users reset-password ${id}`)}` +
+              (globalOptions.apiKey
+                ? '\nSupply the same API key you passed with --api-key, e.g. via the ' +
+                  'ABSMARTLY_API_KEY environment variable, so it stays out of your shell history.'
+                : '')
           );
         }
 

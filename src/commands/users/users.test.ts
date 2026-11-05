@@ -419,6 +419,22 @@ describe('users command', () => {
       expect(err).not.toContain('secret-key');
     });
 
+    it('tells --api-key users to supply the key securely without echoing it', async () => {
+      vi.mocked(getGlobalOptions).mockReturnValue({ output: 'table', apiKey: 'secret-key' } as any);
+      (mockClient as any).resetUserPassword.mockRejectedValueOnce(new Error('boom'));
+      await expect(usersCommand.parseAsync(createArgs)).rejects.toThrow('process.exit: 1');
+      const err = consoleErrorSpy.mock.calls.flat().join(' ');
+      expect(err).toContain('abs users reset-password 55');
+      expect(err).toContain('ABSMARTLY_API_KEY');
+      expect(err).not.toContain('secret-key');
+    });
+
+    it('omits the API key hint when --api-key was not used', async () => {
+      (mockClient as any).resetUserPassword.mockRejectedValueOnce(new Error('boom'));
+      await expect(usersCommand.parseAsync(createArgs)).rejects.toThrow('process.exit: 1');
+      expect(consoleErrorSpy.mock.calls.flat().join(' ')).not.toContain('ABSMARTLY_API_KEY');
+    });
+
     it('includes id and password in explicit structured output', async () => {
       vi.mocked(getGlobalOptions).mockReturnValue({ output: 'json', outputExplicit: true } as any);
       await usersCommand.parseAsync(createArgs);
