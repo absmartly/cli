@@ -401,6 +401,24 @@ describe('users command', () => {
       expect(err).toContain('abs users reset-password 55');
     });
 
+    it('keeps the original config/profile/endpoint in the recovery command', async () => {
+      vi.mocked(getGlobalOptions).mockReturnValue({
+        output: 'table',
+        config: '/tmp/my config.yaml',
+        profile: 'staging',
+        endpoint: 'https://staging.example.com/v1',
+        apiKey: 'secret-key',
+      } as any);
+      (mockClient as any).resetUserPassword.mockRejectedValueOnce(new Error('boom'));
+      await expect(usersCommand.parseAsync(createArgs)).rejects.toThrow('process.exit: 1');
+      const err = consoleErrorSpy.mock.calls.flat().join(' ');
+      expect(err).toContain(
+        "abs --config '/tmp/my config.yaml' --profile staging " +
+          '--endpoint https://staging.example.com/v1 users reset-password 55'
+      );
+      expect(err).not.toContain('secret-key');
+    });
+
     it('includes id and password in explicit structured output', async () => {
       vi.mocked(getGlobalOptions).mockReturnValue({ output: 'json', outputExplicit: true } as any);
       await usersCommand.parseAsync(createArgs);

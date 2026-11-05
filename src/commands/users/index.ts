@@ -338,6 +338,21 @@ const getCommand = new Command('get')
     })
   );
 
+function shellQuote(value: string): string {
+  return /^[\w@%+=:,./-]+$/.test(value) ? value : `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+// Rebuild a follow-up `abs` command that targets the same config/profile/
+// endpoint as the current invocation. The API key is deliberately left out
+// so it is never echoed to the terminal.
+function recoveryCommand(globalOptions: GlobalOptions, subcommand: string): string {
+  const target: string[] = [];
+  if (globalOptions.config) target.push('--config', shellQuote(globalOptions.config));
+  if (globalOptions.profile) target.push('--profile', shellQuote(globalOptions.profile));
+  if (globalOptions.endpoint) target.push('--endpoint', shellQuote(globalOptions.endpoint));
+  return ['abs', ...target, subcommand].join(' ');
+}
+
 const createCommand = new Command('create')
   .description('Create a new user')
   .requiredOption('--email <email>', 'user email')
@@ -368,7 +383,7 @@ const createCommand = new Command('create')
           const reason = error instanceof Error ? error.message : String(error);
           throw new Error(
             `User created with ID: ${id}, but generating a password failed: ${reason}\n` +
-              `Run: abs users reset-password ${id}`
+              `Run: ${recoveryCommand(globalOptions, `users reset-password ${id}`)}`
           );
         }
 
