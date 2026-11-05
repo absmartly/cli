@@ -35,7 +35,10 @@ export function resolveByName<T extends { id: number; name: string }>(
   }
 
   const lowerName = trimmed.toLowerCase();
-  const matches = items.filter((item) => item.name.toLowerCase() === lowerName);
+  // Search results include ID-only placeholders for numeric refs; they have no name.
+  const matches = items.filter(
+    (item) => typeof item.name === 'string' && item.name.toLowerCase() === lowerName
+  );
 
   if (matches.length === 1) {
     return matches[0]!;
@@ -48,4 +51,34 @@ export function resolveByName<T extends { id: number; name: string }>(
 
   const availableNames = items.map((item) => `"${item.name}" (id: ${item.id})`).join(', ');
   throw new Error(`${entityType} "${trimmed}" not found. Available: ${availableNames}`);
+}
+
+/** Index once when resolving many references against the same catalogue. */
+export function createNameResolver<T extends { id: number; name: string }>(
+  items: T[]
+): (name: string, label: string) => T {
+  const byId = new Map<number, T>();
+  const byName = new Map<string, T[]>();
+  for (const item of items) {
+    if (!byId.has(item.id)) byId.set(item.id, item);
+    if (typeof item.name !== 'string') continue; // ID-only placeholder
+    const key = item.name.toLowerCase();
+    const existing = byName.get(key);
+    if (existing) existing.push(item);
+    else byName.set(key, [item]);
+  }
+  return (name, label) => {
+    const trimmed = name.trim();
+    const id = parseInt(trimmed, 10);
+    if (!isNaN(id) && String(id) === trimmed) {
+      const match = byId.get(id);
+      if (match) return match;
+    } else {
+      const matches = byName.get(trimmed.toLowerCase());
+      if (matches?.length === 1) return matches[0]!;
+    }
+    // Errors retain the existing wording and input order. They stop building
+    // the template, so their one-off scan does not multiply across references.
+    return resolveByName(items, name, label);
+  };
 }

@@ -4,8 +4,6 @@ import {
   getAPIClientFromOptions,
   getGlobalOptions,
   printResult,
-  resolveAPIKey,
-  resolveEndpoint,
   withErrorHandling,
 } from '../../lib/utils/api-helper.js';
 import { parseExperimentFile } from '../../lib/template/parser.js';
@@ -14,10 +12,6 @@ import { runInteractiveEditor } from '../../lib/interactive/run.js';
 import { getDefaultType } from './default-type.js';
 import { registerCustomFieldOptions, extractCustomFieldValues } from './custom-field-options.js';
 import { buildCreatePayloadFromOptions, createExperiment } from '../../core/experiments/create.js';
-
-function shellEscape(s: string): string {
-  return "'" + s.replace(/'/g, "'\\''") + "'";
-}
 
 function parseInteger(flag: string): (value: string) => number {
   return (value: string) => {
@@ -88,10 +82,7 @@ export const createCommand = new Command('create')
 
 registerCustomFieldOptions(createCommand, getDefaultType());
 
-createCommand
-  .option('-i, --interactive', 'interactive step-by-step editor')
-  .option('--dry-run', 'show the request payload without making the API call')
-  .option('--as-curl', 'output as curl command instead of making the API call');
+createCommand.option('-i, --interactive', 'interactive step-by-step editor');
 
 createCommand.action(
   withErrorHandling(async (options) => {
@@ -164,35 +155,6 @@ createCommand.action(
           globalOptions.profile as string
         ),
       });
-    }
-
-    if (options.dryRun) {
-      console.log(chalk.blue('📋 Request Payload (dry-run):'));
-      console.log('');
-      console.log('POST /experiments');
-      console.log('');
-      console.log(JSON.stringify(data, null, 2));
-      console.log('');
-      return;
-    }
-
-    if (options.asCurl) {
-      const endpoint = resolveEndpoint(globalOptions);
-      const apiKey = await resolveAPIKey(globalOptions);
-
-      console.error(chalk.yellow('Warning: The following command contains your API key.'));
-      console.log(chalk.blue('cURL Command:'));
-      console.log('');
-      console.log(`curl -X POST ${shellEscape(endpoint + '/experiments')} \\`);
-      console.log(`  -H ${shellEscape('Authorization: Api-Key ' + apiKey)} \\`);
-      console.log(`  -H 'Content-Type: application/json' \\`);
-      console.log(`  -H 'Accept: application/json' \\`);
-      console.log(`  -d ${shellEscape(JSON.stringify(data))}`);
-      console.log('');
-      console.log(chalk.yellow('Tip: Pipe to jq for formatted output:'));
-      console.log(`  ... | jq`);
-      console.log('');
-      return;
     }
 
     const result = await createExperiment(client, data);

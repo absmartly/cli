@@ -60,8 +60,7 @@ registerCustomFieldOptions(updateCommand, getDefaultType());
 
 updateCommand
   .option('--note <text>', 'activity log note')
-  .option('-i, --interactive', 'interactive step-by-step editor')
-  .option('--dry-run', 'show the request payload without making the API call');
+  .option('-i, --interactive', 'interactive step-by-step editor');
 
 updateCommand.action(
   withErrorHandling(async (nameOrId: string, options) => {
@@ -121,16 +120,6 @@ updateCommand.action(
     }
 
     const note = await resolveNote(options, 'update', getDefaultType(), globalOptions.profile);
-
-    if (options.dryRun) {
-      console.log(chalk.blue('Request Payload (dry-run):'));
-      console.log('');
-      console.log(`PUT /experiments/${id}`);
-      console.log('');
-      console.log(JSON.stringify(changes, null, 2));
-      if (note) console.log(`\nNote: ${note}`);
-      return;
-    }
 
     await updateExperiment(client, { experimentId: id, changes, note });
     printResult(globalOptions, { message: `Experiment ${id} updated`, id });

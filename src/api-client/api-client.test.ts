@@ -283,7 +283,27 @@ describe.skipIf(isLiveMode)('APIClient core', () => {
         })
       );
       await client.listExperiments({ created_after: 0 });
-      expect(receivedParams?.get('created_at')).toBe('0,0');
+      expect(receivedParams?.get('created_at')).toBe('0,');
+    });
+
+    // The API treats an empty bound as open-ended but a literal 0 as epoch 0,
+    // so a one-sided range must leave the missing side empty.
+    it('should leave the upper bound empty when only an after date is given', async () => {
+      let receivedParams: URLSearchParams | null = null;
+      server.use(
+        http.get(`${BASE_URL}/experiments`, ({ request }) => {
+          receivedParams = new URL(request.url).searchParams;
+          return HttpResponse.json({ experiments: [] });
+        })
+      );
+      await client.listExperiments({
+        created_after: 1000,
+        started_after: 2000,
+        stopped_after: 3000,
+      });
+      expect(receivedParams?.get('created_at')).toBe('1000,');
+      expect(receivedParams?.get('started_at')).toBe('2000,');
+      expect(receivedParams?.get('stopped_at')).toBe('3000,');
     });
 
     it('should pass started_at with only started_before', async () => {
@@ -295,7 +315,7 @@ describe.skipIf(isLiveMode)('APIClient core', () => {
         })
       );
       await client.listExperiments({ started_before: 1000 });
-      expect(receivedParams?.get('started_at')).toBe('0,1000');
+      expect(receivedParams?.get('started_at')).toBe(',1000');
     });
 
     it('should pass stopped_at with timestamp 0 for stopped_after', async () => {

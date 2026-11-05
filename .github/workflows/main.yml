@@ -3,6 +3,7 @@ name: Main
 on:
   merge_group:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -12,28 +13,8 @@ jobs:
     name: CI Checks
     uses: ./.github/workflows/_ci-checks.yml
 
-  live-test:
-    name: Live API Tests
-    runs-on: ubuntu-latest
+  live:
+    name: Live
     needs: ci
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: oven-sh/setup-bun@v2
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-
-      - name: Install libsecret (keytar build dep)
-        run: sudo apt-get update && sudo apt-get install -y libsecret-1-dev
-
-      - run: bun install --frozen-lockfile
-
-      - name: Run live API tests
-        run: bun vitest run
-        env:
-          USE_LIVE_API: '1'
-          LIVE_API_URL: ${{ secrets.LIVE_API_URL }}
-          LIVE_API_KEY: ${{ secrets.LIVE_API_KEY }}
-          LIVE_OAUTH_TOKEN: ${{ secrets.LIVE_OAUTH_TOKEN }}
+    uses: ./.github/workflows/_live-tests.yml
+    secrets: inherit

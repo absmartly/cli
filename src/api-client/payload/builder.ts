@@ -1,5 +1,6 @@
 import type { ExperimentTemplate, VariantTemplate } from '../template/parser.js';
-import { resolveByName, type ResolverContext } from './resolver.js';
+import { extractAngleBracketed } from '../../lib/utils/linear-match.js';
+import { createNameResolver, resolveByName, type ResolverContext } from './resolver.js';
 import { buildSecondaryMetrics } from './metrics-builder.js';
 import { resolveScreenshot } from '../template/screenshot.js';
 import {
@@ -60,6 +61,40 @@ interface CustomFieldResult {
   warnings: string[];
 }
 
+type LookupUser = NonNullable<ResolverContext['users']>[number];
+
+interface UserLookup {
+  /** First user, in input order, whose lowercased email equals `ref`. */
+  byEmail(ref: string): LookupUser | undefined;
+  /** Users whose lowercased email or "first last" equals `ref`, in input order. */
+  matching(ref: string): LookupUser[];
+}
+
+/**
+ * Indexes users once so resolving each template reference is a map lookup
+ * rather than a scan of every user (which was quadratic in owners x users).
+ */
+function indexUsers(users: ResolverContext['users']): UserLookup {
+  const byEmail = new Map<string, LookupUser>();
+  const byEmailOrName = new Map<string, LookupUser[]>();
+  for (const u of users ?? []) {
+    // Search results include ID-only placeholders for numeric owner refs.
+    if (typeof u.email !== 'string') continue;
+    const email = u.email.toLowerCase();
+    const name = `${u.first_name ?? ''} ${u.last_name ?? ''}`.trim().toLowerCase();
+    if (!byEmail.has(email)) byEmail.set(email, u);
+    for (const key of email === name ? [email] : [email, name]) {
+      const list = byEmailOrName.get(key);
+      if (list) list.push(u);
+      else byEmailOrName.set(key, [u]);
+    }
+  }
+  return {
+    byEmail: (ref) => byEmail.get(ref),
+    matching: (ref) => byEmailOrName.get(ref) ?? [],
+  };
+}
+
 function buildCustomSectionFieldValues(
   context: ResolverContext,
   experimentType: string,
@@ -106,6 +141,7 @@ function buildCustomSectionFieldValues(
     return { values: undefined, warnings };
   }
 
+  const userLookup = indexUsers(context.users);
   const fieldValues: Record<string, { type: string; value: string }> = {};
   for (const field of relevantFields) {
     let value = field.default_value ?? '';
@@ -123,10 +159,7 @@ function buildCustomSectionFieldValues(
             .map((ref) => {
               const trimmed = ref.trim();
               if (trimmed.startsWith('user:')) return parseInt(trimmed.slice(5), 10);
-              const user = context.users?.find(
-                (u) => u.email.toLowerCase() === trimmed.toLowerCase()
-              );
-              return user?.id;
+              return userLookup.byEmail(trimmed.toLowerCase())?.id;
             })
             .filter((id): id is number => id !== undefined && !isNaN(id));
           value = JSON.stringify({ selected: userIds.map((userId) => ({ userId })) });
@@ -148,10 +181,10 @@ async function buildVariantScreenshots(
   if (!template.variants) return [];
 
   const screenshots: Array<Record<string, unknown>> = [];
-  for (const v of template.variants) {
+  for (const [index, v] of template.variants.entries()) {
     if (v.screenshot_id) {
       screenshots.push({
-        variant: v.variant ?? template.variants.indexOf(v),
+        variant: v.variant ?? index,
         screenshot_file_upload_id: v.screenshot_id,
         ...(v.screenshot_label ? { label: v.screenshot_label } : {}),
       });
@@ -172,7 +205,7 @@ async function buildVariantScreenshots(
     if (!resolved) continue;
 
     screenshots.push({
-      variant: v.variant ?? template.variants.indexOf(v),
+      variant: v.variant ?? index,
       file_upload: resolved,
       ...(v.screenshot_label ? { label: v.screenshot_label } : {}),
     });
@@ -244,10 +277,6 @@ export async function buildExperimentPayload(
     state: template.state ?? DEFAULT_STATE,
     percentage_of_traffic: template.percentage_of_traffic ?? DEFAULT_TRAFFIC,
     percentages: template.percentages ?? DEFAULT_PERCENTAGES,
-    analysis_type: analysisType,
-    required_alpha: template.required_alpha ?? DEFAULT_REQUIRED_ALPHA,
-    required_power: template.required_power ?? DEFAULT_REQUIRED_POWER,
-    baseline_participants_per_day: template.baseline_participants ?? DEFAULT_BASELINE_PARTICIPANTS,
     audience: DEFAULT_AUDIENCE,
     audience_strict: false,
     nr_variants: variants.length,
@@ -257,14 +286,26 @@ export async function buildExperimentPayload(
     experiment_tags: [],
   };
 
-  if (template.minimum_detectable_effect)
+  // Feature flags do not have experiment analysis settings. The feature form
+  // deliberately strips these fields before sending its payload; emitting the
+  // experiment defaults here makes the backend reject template-created flags
+  // (notably the group-sequential interval fields) with HTTP 500.
+  if (experimentType !== 'feature') {
+    payload.analysis_type = analysisType;
+    payload.required_alpha = template.required_alpha ?? DEFAULT_REQUIRED_ALPHA;
+    payload.required_power = template.required_power ?? DEFAULT_REQUIRED_POWER;
+    payload.baseline_participants_per_day =
+      template.baseline_participants ?? DEFAULT_BASELINE_PARTICIPANTS;
+  }
+
+  if (experimentType !== 'feature' && template.minimum_detectable_effect)
     payload.minimum_detectable_effect = template.minimum_detectable_effect;
-  if (template.baseline_primary_metric_mean)
+  if (experimentType !== 'feature' && template.baseline_primary_metric_mean)
     payload.baseline_primary_metric_mean = template.baseline_primary_metric_mean;
-  if (template.baseline_primary_metric_stdev)
+  if (experimentType !== 'feature' && template.baseline_primary_metric_stdev)
     payload.baseline_primary_metric_stdev = template.baseline_primary_metric_stdev;
 
-  if (analysisType === 'group_sequential') {
+  if (experimentType !== 'feature' && analysisType === 'group_sequential') {
     payload.group_sequential_futility_type =
       template.group_sequential_futility_type ?? DEFAULT_FUTILITY_TYPE;
     if (template.group_sequential_analysis_count)
@@ -295,8 +336,9 @@ export async function buildExperimentPayload(
     payload.primary_metric = { metric_id: metric.id };
   }
 
+  const metricResolver = createNameResolver(context.metrics);
   const resolveMetricNames = (names: string[] | undefined, label: string) =>
-    (names ?? []).map((name) => resolveByName(context.metrics, name, label));
+    (names ?? []).map((name) => metricResolver(name, label));
 
   const allMetrics = buildSecondaryMetrics({
     secondary: resolveMetricNames(template.secondary_metrics, 'Secondary metric'),
@@ -304,12 +346,26 @@ export async function buildExperimentPayload(
     exploratory: resolveMetricNames(template.exploratory_metrics, 'Exploratory metric'),
   });
 
-  if (allMetrics.length > 0) {
+  if (experimentType === 'feature') {
+    const metrics = template.primary_metric
+      ? [resolveByName(context.metrics, template.primary_metric, 'Metric'), ...allMetrics]
+      : allMetrics;
+    const ids = [
+      ...new Set(metrics.map((metric) => ('metric_id' in metric ? metric.metric_id : metric.id))),
+    ];
+    payload.primary_metric = { metric_id: null };
+    payload.secondary_metrics = ids.map((metric_id, order_index) => ({
+      metric_id,
+      type: 'guardrail',
+      order_index,
+    }));
+  } else if (allMetrics.length > 0) {
     payload.secondary_metrics = allMetrics;
   }
 
   let ownerId: number | undefined;
   if (template.owners && template.owners.length > 0 && context.users) {
+    const userLookup = indexUsers(context.users);
     const resolvedOwners: Array<{ user_id: number }> = [];
     for (const ownerRef of template.owners) {
       const asInt = parseInt(String(ownerRef), 10);
@@ -317,13 +373,8 @@ export async function buildExperimentPayload(
         resolvedOwners.push({ user_id: asInt });
       } else {
         const raw = String(ownerRef).trim();
-        const emailInBrackets = /<(.+?)>/.exec(raw);
-        const ref = (emailInBrackets ? emailInBrackets[1]! : raw).toLowerCase();
-        const matches = context.users.filter(
-          (u) =>
-            u.email.toLowerCase() === ref ||
-            `${u.first_name ?? ''} ${u.last_name ?? ''}`.trim().toLowerCase() === ref
-        );
+        const ref = (extractAngleBracketed(raw) ?? raw).toLowerCase();
+        const matches = userLookup.matching(ref);
         if (matches.length === 1) {
           resolvedOwners.push({ user_id: matches[0]!.id });
         } else if (matches.length > 1) {
@@ -346,9 +397,14 @@ export async function buildExperimentPayload(
   }
 
   if (template.teams && template.teams.length > 0 && context.teams) {
+    const teamByName = new Map<string, (typeof context.teams)[number]>();
+    for (const team of context.teams) {
+      const key = team.name.toLowerCase();
+      if (!teamByName.has(key)) teamByName.set(key, team);
+    }
     const resolvedTeams: Array<{ team_id: number }> = [];
     for (const teamName of template.teams) {
-      const team = context.teams.find((t) => t.name.toLowerCase() === teamName.toLowerCase());
+      const team = teamByName.get(teamName.toLowerCase());
       if (team) {
         resolvedTeams.push({ team_id: team.id });
       } else {
@@ -359,9 +415,14 @@ export async function buildExperimentPayload(
   }
 
   if (template.tags && template.tags.length > 0 && context.experimentTags) {
+    const tagByName = new Map<string, (typeof context.experimentTags)[number]>();
+    for (const tag of context.experimentTags) {
+      const key = tag.tag.toLowerCase();
+      if (!tagByName.has(key)) tagByName.set(key, tag);
+    }
     const resolvedTags: Array<{ experiment_tag_id: number }> = [];
     for (const tagName of template.tags) {
-      const tag = context.experimentTags.find((t) => t.tag.toLowerCase() === tagName.toLowerCase());
+      const tag = tagByName.get(tagName.toLowerCase());
       if (tag) {
         resolvedTags.push({ experiment_tag_id: tag.id });
       } else {

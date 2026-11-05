@@ -39,6 +39,19 @@ export function parseFilterValues(input?: string): string[] {
 }
 
 /**
+ * Like {@link parseFilterValues}, but errors when the flag was given and
+ * reduced to nothing (e.g. `--department " , "`), so a typo can't silently
+ * widen a filter or drop a write.
+ */
+export function parseRequiredFilterValues(flag: string, raw: string): string[] {
+  const values = parseFilterValues(raw);
+  if (values.length === 0) {
+    throw new Error(`${flag} was given no usable values (got "${raw}").`);
+  }
+  return values;
+}
+
+/**
  * True iff any client-side filter flag is set to a non-empty string.
  * Native flags like `search`/`sort` are not client filters.
  */
@@ -159,8 +172,14 @@ export async function resolveRoleIds(client: APIClient, values: string[]): Promi
     })) as Array<Record<string, unknown>>;
     const exact = roles.filter((r) => String(r.name ?? '').toLowerCase() === value.toLowerCase());
     if (exact.length === 0) {
+      // Suggestions are best-effort: a failed lookup must not mask the real error.
+      const available = (await client
+        .listRoles({ items: USER_FILTER_SCAN_PAGE_SIZE })
+        .catch(() => [])) as Array<Record<string, unknown>>;
+      const names = available.map((r) => String(r.name ?? r.id)).join(', ');
       throw new Error(
-        `No role found matching name "${value}". Use a numeric role ID, or check the name.`
+        `No role found matching name "${value}". Use a numeric role ID, or check the name.` +
+          (names ? `\nAvailable roles: ${names}` : '')
       );
     }
     if (exact.length > 1) {
@@ -173,6 +192,20 @@ export async function resolveRoleIds(client: APIClient, values: string[]): Promi
   }
 
   return ids;
+}
+
+/**
+ * Parse and resolve a `--role` write flag (comma-separated role names and/or
+ * numeric IDs) into the `roles` payload the users create/update endpoints
+ * accept. Resolution happens before any write, so an unknown role never
+ * reaches the API.
+ */
+export async function resolveRolesPayload(
+  client: APIClient,
+  raw: string
+): Promise<Array<{ role_id: number }>> {
+  const ids = await resolveRoleIds(client, parseRequiredFilterValues('--role', raw));
+  return ids.map((role_id) => ({ role_id }));
 }
 
 /**

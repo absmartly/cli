@@ -35,7 +35,7 @@ import {
   archiveUser as coreArchiveUser,
 } from '../../core/users/index.js';
 import {
-  parseFilterValues,
+  parseRequiredFilterValues,
   hasClientFilters,
   resolveRoleIds,
   fetchAllUsers,
@@ -126,25 +126,21 @@ const listCommand = addPaginationOptions(
     // role/department query); native --search/--ids don't warrant a full roles scan.
     const rolesColumnActive = clientFiltersActive;
 
-    // Parse a filter flag, erroring if it was given but reduced to nothing (e.g.
-    // `--department " , "`) rather than silently returning the full unfiltered list.
-    const parseFilterFlag = (flag: string, raw: string): string[] => {
-      const values = parseFilterValues(raw);
-      if (values.length === 0) {
-        throw new Error(`${flag} was given no usable values (got "${raw}").`);
-      }
-      return values;
-    };
-
-    // Resolve client-side filter values up front (role names -> IDs).
+    // Resolve client-side filter values up front (role names -> IDs). A flag that
+    // reduces to nothing (e.g. `--department " , "`) errors rather than silently
+    // returning the full unfiltered list.
     const filters: UserClientFilters = {};
     if (options.department)
-      filters.department = parseFilterFlag('--department', options.department);
+      filters.department = parseRequiredFilterValues('--department', options.department);
     if (options.role)
-      filters.roleIds = await resolveRoleIds(client, parseFilterFlag('--role', options.role));
-    if (options.jobTitle) filters.jobTitle = parseFilterFlag('--job-title', options.jobTitle);
-    if (options.email) filters.email = parseFilterFlag('--email', options.email);
-    if (options.name) filters.name = parseFilterFlag('--name', options.name);
+      filters.roleIds = await resolveRoleIds(
+        client,
+        parseRequiredFilterValues('--role', options.role)
+      );
+    if (options.jobTitle)
+      filters.jobTitle = parseRequiredFilterValues('--job-title', options.jobTitle);
+    if (options.email) filters.email = parseRequiredFilterValues('--email', options.email);
+    if (options.name) filters.name = parseRequiredFilterValues('--name', options.name);
 
     let users: unknown[];
     let total: number | undefined;
@@ -343,7 +339,7 @@ const createCommand = new Command('create')
   .description('Create a new user')
   .requiredOption('--email <email>', 'user email')
   .requiredOption('--name <name>', 'user full name')
-  .option('--role <role>', 'user role')
+  .option('--role <roles>', 'global-team role name(s) or ID(s) (comma-separated)')
   .action(
     withErrorHandling(async (options) => {
       const globalOptions = getGlobalOptions(createCommand);
@@ -367,7 +363,10 @@ const updateCommand = new Command('update')
   .description('Update a user')
   .argument('<id>', 'user ID', parseUserId)
   .option('--name <name>', 'new full name')
-  .option('--role <role>', 'new role')
+  .option(
+    '--role <roles>',
+    'replace global-team roles with these role name(s) or ID(s) (comma-separated)'
+  )
   .action(
     withErrorHandling(async (id: UserId, options) => {
       const globalOptions = getGlobalOptions(updateCommand);

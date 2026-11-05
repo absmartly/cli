@@ -7,6 +7,7 @@ import {
   resolveAPIKey,
 } from '../../lib/utils/api-helper.js';
 import { resetCommand } from '../../test/helpers/command-reset.js';
+import { DryRunError } from '../../api-client/http-client.js';
 
 vi.mock('../../lib/utils/api-helper.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../lib/utils/api-helper.js')>();
@@ -120,11 +121,20 @@ describe('clone command', () => {
     expect(mockClient.createExperiment).not.toHaveBeenCalled();
   });
 
-  it('prints payload and skips creation with --dry-run', async () => {
-    await cloneCommand.parseAsync(['node', 'test', '100', '--name', 'my_clone', '--dry-run']);
+  it('lets the global --dry-run short-circuit at the API client (no local flag)', async () => {
+    vi.mocked(getGlobalOptions).mockReturnValue({ output: 'table', dryRun: true } as any);
+    mockClient.createExperiment.mockRejectedValueOnce(new DryRunError('POST', '/experiments'));
 
-    expect(mockClient.createExperiment).not.toHaveBeenCalled();
-    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('dry-run'));
-    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('"name"'));
+    await cloneCommand.parseAsync(['node', 'test', '100', '--name', 'my_clone']);
+
+    expect(mockClient.createExperiment).toHaveBeenCalledOnce();
+    const output = consoleErrorSpy.mock.calls.flat().join(' ');
+    expect(output).toContain('Dry run');
+    expect(consoleSpy.mock.calls.flat().join(' ')).not.toContain('Dry run');
+  });
+
+  it('has no local --dry-run option (superseded by global --dry-run)', () => {
+    const optionNames = cloneCommand.options.map((o) => o.long);
+    expect(optionNames).not.toContain('--dry-run');
   });
 });

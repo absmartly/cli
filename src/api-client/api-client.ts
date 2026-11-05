@@ -1,4 +1,5 @@
 import { APIError } from './http-client.js';
+import { extractAngleBracketed } from '../lib/utils/linear-match.js';
 import type { HttpClient, HttpRequestConfig, HttpResponse } from './http-client.js';
 import { experimentToInput } from './experiment-transform.js';
 import type { ExperimentInput } from './experiment-transform.js';
@@ -62,6 +63,12 @@ import type {
 
 function createAPIError(message: string, response?: HttpResponse): APIError {
   return new APIError(message, response?.status, response?.data);
+}
+
+// The API reads an empty bound as open-ended but `0` as epoch 0, so a missing
+// side must be left empty rather than defaulted to 0.
+function dateRange(after?: number, before?: number): string {
+  return `${after ?? ''},${before ?? ''}`;
 }
 
 export class APIClient {
@@ -195,16 +202,16 @@ export class APIClient {
 
     if (options.created_at) params.created_at = options.created_at;
     else if (options.created_after !== undefined || options.created_before !== undefined) {
-      params.created_at = `${options.created_after ?? 0},${options.created_before ?? 0}`;
+      params.created_at = dateRange(options.created_after, options.created_before);
     }
     if (options.updated_at) params.updated_at = options.updated_at;
     if (options.started_at) params.started_at = options.started_at;
     else if (options.started_after !== undefined || options.started_before !== undefined) {
-      params.started_at = `${options.started_after ?? 0},${options.started_before ?? 0}`;
+      params.started_at = dateRange(options.started_after, options.started_before);
     }
     if (options.stopped_at) params.stopped_at = options.stopped_at;
     else if (options.stopped_after !== undefined || options.stopped_before !== undefined) {
-      params.stopped_at = `${options.stopped_after ?? 0},${options.stopped_before ?? 0}`;
+      params.stopped_at = dateRange(options.stopped_after, options.stopped_before);
     }
     if (options.full_on_at) params.full_on_at = options.full_on_at;
 
@@ -2306,12 +2313,13 @@ export class APIClient {
         if (byId) return byId;
         throw new Error(`User with ID ${asInt} not found`);
       }
-      const emailInBrackets = /<(.+?)>/.exec(trimmed);
-      const searchRef = (emailInBrackets ? emailInBrackets[1]! : trimmed).toLowerCase();
+      const searchRef = (extractAngleBracketed(trimmed) ?? trimmed).toLowerCase();
       const match = results.filter(
         (u) =>
-          u.email.toLowerCase() === searchRef ||
-          `${u.first_name ?? ''} ${u.last_name ?? ''}`.trim().toLowerCase() === searchRef
+          // ID-only placeholders for numeric refs have no email or name.
+          typeof u.email === 'string' &&
+          (u.email.toLowerCase() === searchRef ||
+            `${u.first_name ?? ''} ${u.last_name ?? ''}`.trim().toLowerCase() === searchRef)
       );
       if (match.length === 1) return match[0]!;
       if (match.length > 1)

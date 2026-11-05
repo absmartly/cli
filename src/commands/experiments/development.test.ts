@@ -5,6 +5,7 @@ import { createAPIClient } from '../../lib/api/client.js';
 import { isLiveMode, TEST_BASE_URL, TEST_API_KEY } from '../../test/helpers/test-config.js';
 import { developmentCommand } from './development.js';
 import { getAPIClientFromOptions, getGlobalOptions } from '../../lib/utils/api-helper.js';
+import { DryRunError } from '../../api-client/http-client.js';
 import { resetCommand } from '../../test/helpers/command-reset.js';
 
 vi.mock('../../lib/utils/api-helper.js', async (importOriginal) => {
@@ -96,5 +97,25 @@ describe('development command', () => {
     await developmentCommand.parseAsync(['node', 'test', '42', '--note', 'Custom reason']);
 
     expect(mockClient.developmentExperiment).toHaveBeenCalledWith(42, 'Custom reason');
+  });
+
+  it('treats DryRunError as a preview, not a failure', async () => {
+    const saved = process.exitCode;
+    process.exitCode = undefined;
+    try {
+      mockClient.developmentExperiment.mockRejectedValueOnce(
+        new DryRunError('PUT', '/experiments/42/development')
+      );
+
+      await developmentCommand.parseAsync(['node', 'test', '42']);
+
+      const output = consoleErrorSpy.mock.calls.flat().join(' ');
+      expect(output).toContain('Experiment 42');
+      expect(output).toContain('Dry run: PUT /experiments/42/development');
+      expect(consoleSpy).not.toHaveBeenCalled();
+      expect(process.exitCode).not.toBe(1);
+    } finally {
+      process.exitCode = saved;
+    }
   });
 });

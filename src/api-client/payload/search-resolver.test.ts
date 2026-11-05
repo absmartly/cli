@@ -2,6 +2,41 @@ import { describe, it, expect, vi } from 'vitest';
 import { resolveBySearch } from './search-resolver.js';
 
 describe('resolveBySearch', () => {
+  it('has no search limit unless the caller sets one', async () => {
+    const search = vi.fn().mockResolvedValue([]);
+    await resolveBySearch(
+      Array.from({ length: 150 }, (_, i) => `n${i}`),
+      search
+    );
+    expect(search).toHaveBeenCalledTimes(150);
+  });
+
+  it('refuses more distinct searches than maxSearches before making requests', async () => {
+    const search = vi.fn();
+    const queries = [...Array.from({ length: 4 }, (_, i) => `n${i}`), 'n0', '42'];
+    await expect(resolveBySearch(queries, search, { maxSearches: 3 })).rejects.toThrow(
+      /4 distinct names need a search; the limit is 3/
+    );
+    expect(search).not.toHaveBeenCalled();
+    await expect(
+      resolveBySearch(queries, vi.fn().mockResolvedValue([]), { maxSearches: 4 })
+    ).resolves.toEqual([{ id: 42 }]);
+  });
+
+  it('keeps at most five searches in flight and retains query order', async () => {
+    let active = 0;
+    let maxActive = 0;
+    const queries = Array.from({ length: 20 }, (_, i) => `n${i}`);
+    const result = await resolveBySearch(queries, async (name) => {
+      maxActive = Math.max(maxActive, ++active);
+      await Promise.resolve();
+      active--;
+      return [{ id: Number(name.slice(1)) }];
+    });
+    expect(maxActive).toBe(5);
+    expect(result.map((r) => r.id)).toEqual(queries.map((_, i) => i));
+  });
+
   it('deduplicates results by id', async () => {
     const searchFn = vi
       .fn()
