@@ -327,8 +327,8 @@ describe('users command', () => {
 
   it('should resolve comma-separated role names with spaces and ids', async () => {
     vi.mocked(mockClient.listRoles)
-      .mockResolvedValueOnce([{ id: 7, name: 'Base user' }] as any) // ids lookup
-      .mockResolvedValueOnce([{ id: 7, name: 'Base user' }] as any); // name lookup
+      .mockResolvedValueOnce([{ id: 7, name: 'Base user' }] as any)
+      .mockResolvedValueOnce([{ id: 7, name: 'Base user' }] as any);
     await usersCommand.parseAsync([
       'node',
       'test',

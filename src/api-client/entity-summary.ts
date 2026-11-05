@@ -319,11 +319,6 @@ export function summarizeWebhookRow(w: Record<string, unknown>): Record<string, 
   };
 }
 
-/**
- * Replace a role's raw `permissions` array (`[{ permission: { name, category_id } }]`)
- * with a map of category NAME -> comma-separated permission names. Unknown
- * categories fall back to `category <id>`. Use `--raw` for the original payload.
- */
 export function groupRolePermissions(
   role: Record<string, unknown>,
   categories: Array<{ id: number; name: string }>
