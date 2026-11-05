@@ -34,6 +34,7 @@ import {
   updateUser as coreUpdateUser,
   archiveUser as coreArchiveUser,
 } from '../../core/users/index.js';
+import { resetUserPassword } from '../../core/users/reset-password.js';
 import {
   parseRequiredFilterValues,
   hasClientFilters,
@@ -44,7 +45,7 @@ import {
   formatUserRoles,
   type UserClientFilters,
 } from '../../core/users/filter.js';
-import { resetPasswordCommand } from './reset-password.js';
+import { resetPasswordCommand, printPasswordResult } from './reset-password.js';
 import { userApiKeysCommand } from './api-keys.js';
 
 export const usersCommand = new Command('users').alias('user').description('User commands');
@@ -335,11 +336,30 @@ const getCommand = new Command('get')
     })
   );
 
+function shellQuote(value: string): string {
+  return /^[\w@%+=:,./-]+$/.test(value) ? value : `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+// Rebuild a follow-up `abs` command that targets the same config/profile/
+// endpoint as the current invocation. The API key is deliberately left out
+// so it is never echoed to the terminal.
+function recoveryCommand(globalOptions: GlobalOptions, subcommand: string): string {
+  const target: string[] = [];
+  if (globalOptions.config) target.push('--config', shellQuote(globalOptions.config));
+  if (globalOptions.profile) target.push('--profile', shellQuote(globalOptions.profile));
+  if (globalOptions.endpoint) target.push('--endpoint', shellQuote(globalOptions.endpoint));
+  return ['abs', ...target, subcommand].join(' ');
+}
+
 const createCommand = new Command('create')
   .description('Create a new user')
   .requiredOption('--email <email>', 'user email')
   .requiredOption('--name <name>', 'user full name')
   .option('--role <roles>', 'global-team role name(s) or ID(s) (comma-separated)')
+  .option(
+    '--with-password',
+    'also generate and print an initial password (the API does not return one on create)'
+  )
   .action(
     withErrorHandling(async (options) => {
       const globalOptions = getGlobalOptions(createCommand);
@@ -351,8 +371,36 @@ const createCommand = new Command('create')
         role: options.role,
       });
 
+      const message = `✓ User created with ID: ${result.data.id}`;
+      if (options.withPassword) {
+        const id = result.data.id as UserId;
+        let password: string;
+        try {
+          password = (await resetUserPassword(client, { id })).data.password;
+        } catch (error) {
+          const reason = error instanceof Error ? error.message : String(error);
+          throw new Error(
+            `User created with ID: ${id}, but generating a password failed: ${reason}\n` +
+              `Run: ${recoveryCommand(globalOptions, `users reset-password ${id}`)}` +
+              (globalOptions.apiKey
+                ? '\nSupply the same API key you passed with --api-key, e.g. via the ' +
+                  'ABSMARTLY_API_KEY environment variable, so it stays out of your shell history.'
+                : '')
+          );
+        }
+
+        printPasswordResult(globalOptions, {
+          id,
+          password,
+          notice: `User created with ID: ${id}`,
+          payload: { success: true, message, id, password },
+          rawPayload: { ...result.data, password },
+        });
+        return;
+      }
+
       printResult(globalOptions, {
-        message: `✓ User created with ID: ${result.data.id}`,
+        message,
         id: result.data.id,
         raw: result.data,
       });
