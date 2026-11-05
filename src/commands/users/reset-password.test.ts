@@ -6,6 +6,7 @@ import {
   printFormatted,
 } from '../../lib/utils/api-helper.js';
 import { resetCommand } from '../../test/helpers/command-reset.js';
+import { setTTYOverride } from '../../lib/utils/stdin.js';
 
 vi.mock('../../lib/utils/api-helper.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../lib/utils/api-helper.js')>();
@@ -32,6 +33,7 @@ describe('reset-password command', () => {
     vi.mocked(getAPIClientFromOptions).mockResolvedValue(mockClient as any);
     vi.mocked(getGlobalOptions).mockReturnValue({ output: 'table' } as any);
     vi.mocked(printFormatted).mockImplementation(() => {});
+    setTTYOverride({ stdout: true });
     consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     processExitSpy = vi.spyOn(process, 'exit').mockImplementation((code?) => {
@@ -40,6 +42,7 @@ describe('reset-password command', () => {
   });
 
   afterEach(() => {
+    setTTYOverride({});
     consoleSpy.mockRestore();
     consoleErrorSpy.mockRestore();
     processExitSpy.mockRestore();
@@ -88,6 +91,22 @@ describe('reset-password command', () => {
     await resetPasswordCommand.parseAsync(['node', 'test', '42']);
     expect(consoleSpy.mock.calls).toEqual([[42]]);
     expect(consoleErrorSpy.mock.calls.flat().join(' ')).toContain('new-pass-123');
+  });
+
+  it('prints only the id on stdout and the password on stderr when piped', async () => {
+    setTTYOverride({ stdout: false });
+    mockClient.resetUserPassword.mockResolvedValue({ password: 'new-pass-123' });
+    await resetPasswordCommand.parseAsync(['node', 'test', '42']);
+    expect(consoleSpy.mock.calls).toEqual([[42]]);
+    expect(consoleErrorSpy.mock.calls.flat().join(' ')).toContain('new-pass-123');
+  });
+
+  it('treats an implicit (config default) structured format like table', async () => {
+    vi.mocked(getGlobalOptions).mockReturnValue({ output: 'json', outputExplicit: false } as any);
+    mockClient.resetUserPassword.mockResolvedValue({ password: 'new-pass-123' });
+    await resetPasswordCommand.parseAsync(['node', 'test', '42']);
+    expect(printFormatted).not.toHaveBeenCalled();
+    expect(consoleSpy.mock.calls.flat().join(' ')).toContain('new-pass-123');
   });
 
   it('should reject invalid user ID', async () => {

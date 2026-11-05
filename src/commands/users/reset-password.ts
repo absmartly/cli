@@ -4,6 +4,8 @@ import {
   getAPIClientFromOptions,
   getGlobalOptions,
   printFormatted,
+  shouldOutputIdsOnly,
+  STRUCTURED_FORMATS,
   withErrorHandling,
 } from '../../lib/utils/api-helper.js';
 import { parseUserId } from '../../lib/utils/validators.js';
@@ -29,27 +31,25 @@ export const resetPasswordCommand = new Command('reset-password')
       const client = await getAPIClientFromOptions(globalOptions);
 
       const result = await resetUserPassword(client, { id });
+      const message = `Password reset for user ${id}`;
       const format = globalOptions.output ?? 'table';
-      if (format === 'table' || format === 'rendered') {
-        printPasswordNotice(`Password reset for user ${id}`, result.data.password);
-      } else if (format === 'ids') {
-        // The password can't be retrieved later, so keep it on stderr.
-        console.log(id);
-        printPasswordNotice(`Password reset for user ${id}`, result.data.password, console.error);
-      } else {
-        // Structured/plain formats: the password is the point of this command,
-        // so include it in the payload (not only under --raw).
+      // Same output selection as `users create --with-password`.
+      if (globalOptions.outputExplicit && STRUCTURED_FORMATS.has(format)) {
+        // The password is the point of this command, so include it in the
+        // payload (not only under --raw).
         printFormatted(
           globalOptions.raw
             ? result.data
-            : {
-                success: true,
-                message: `Password reset for user ${id}`,
-                id,
-                password: result.data.password,
-              },
+            : { success: true, message, id, password: result.data.password },
           globalOptions
         );
+      } else if (shouldOutputIdsOnly(globalOptions)) {
+        // Keep stdout to the bare id (-o ids or piped stdout), but never drop
+        // the password: it can't be retrieved later, so it goes to stderr.
+        console.log(id);
+        printPasswordNotice(message, result.data.password, console.error);
+      } else {
+        printPasswordNotice(message, result.data.password);
       }
     })
   );
