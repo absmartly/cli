@@ -9,6 +9,8 @@ import {
   printResult,
   resolveAPIKey,
   resolveEndpoint,
+  shouldOutputIdsOnly,
+  STRUCTURED_FORMATS,
   withErrorHandling,
   type GlobalOptions,
 } from '../../lib/utils/api-helper.js';
@@ -358,17 +360,33 @@ const createCommand = new Command('create')
 
       const message = `✓ User created with ID: ${result.data.id}`;
       if (options.withPassword) {
-        const pw = await resetUserPassword(client, { id: result.data.id as UserId });
+        const id = result.data.id as UserId;
+        let password: string;
+        try {
+          password = (await resetUserPassword(client, { id })).data.password;
+        } catch (error) {
+          const reason = error instanceof Error ? error.message : String(error);
+          throw new Error(
+            `User created with ID: ${id}, but generating a password failed: ${reason}\n` +
+              `Run: abs users reset-password ${id}`
+          );
+        }
+
         const format = globalOptions.output ?? 'table';
-        if (format === 'table' || format === 'rendered') {
-          printPasswordNotice(`User created with ID: ${result.data.id}`, pw.data.password);
-        } else if (format === 'ids') {
-          console.log(result.data.id);
-        } else {
+        if (globalOptions.outputExplicit && STRUCTURED_FORMATS.has(format)) {
           printFormatted(
-            { success: true, message, id: result.data.id, password: pw.data.password },
+            globalOptions.raw
+              ? { ...result.data, password }
+              : { success: true, message, id, password },
             globalOptions
           );
+        } else if (shouldOutputIdsOnly(globalOptions)) {
+          // Keep stdout to the bare id, but never drop the password: it can't
+          // be retrieved later, so it always goes to stderr.
+          console.log(id);
+          printPasswordNotice(`User created with ID: ${id}`, password, console.error);
+        } else {
+          printPasswordNotice(`User created with ID: ${id}`, password);
         }
         return;
       }

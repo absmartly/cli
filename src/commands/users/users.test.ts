@@ -6,6 +6,7 @@ import {
   printFormatted,
 } from '../../lib/utils/api-helper.js';
 import { resetCommand } from '../../test/helpers/command-reset.js';
+import { setTTYOverride } from '../../lib/utils/stdin.js';
 
 vi.mock('../../lib/utils/api-helper.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../lib/utils/api-helper.js')>();
@@ -365,11 +366,8 @@ describe('users command', () => {
     );
   });
 
-  it('should generate and print a password with --with-password', async () => {
-    (mockClient as any).resetUserPassword = vi.fn().mockResolvedValue({ password: 'init-pw-1' });
-    vi.mocked(mockClient.createUser).mockResolvedValueOnce({ id: 55 } as any);
-    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
-    await usersCommand.parseAsync([
+  describe('create --with-password', () => {
+    const createArgs = [
       'node',
       'test',
       'create',
@@ -378,10 +376,73 @@ describe('users command', () => {
       '--name',
       'John Doe',
       '--with-password',
-    ]);
-    expect((mockClient as any).resetUserPassword).toHaveBeenCalledWith(55);
-    expect(log.mock.calls.flat().join(' ')).toContain('init-pw-1');
-    log.mockRestore();
+    ];
+
+    beforeEach(() => {
+      (mockClient as any).resetUserPassword = vi.fn().mockResolvedValue({ password: 'init-pw-1' });
+      vi.mocked(mockClient.createUser).mockResolvedValueOnce({ id: 55, email: 'j@t.com' } as any);
+      setTTYOverride({ stdout: true });
+    });
+
+    afterEach(() => setTTYOverride({}));
+
+    it('generates and prints a password in table output', async () => {
+      await usersCommand.parseAsync(createArgs);
+      expect((mockClient as any).resetUserPassword).toHaveBeenCalledWith(55);
+      expect(consoleSpy.mock.calls.flat().join(' ')).toContain('init-pw-1');
+    });
+
+    it('reports the created id and a recovery command if password generation fails', async () => {
+      (mockClient as any).resetUserPassword.mockRejectedValueOnce(new Error('boom'));
+      await expect(usersCommand.parseAsync(createArgs)).rejects.toThrow('process.exit: 1');
+      const err = consoleErrorSpy.mock.calls.flat().join(' ');
+      expect(err).toContain('User created with ID: 55');
+      expect(err).toContain('boom');
+      expect(err).toContain('abs users reset-password 55');
+    });
+
+    it('includes id and password in explicit structured output', async () => {
+      vi.mocked(getGlobalOptions).mockReturnValue({ output: 'json', outputExplicit: true } as any);
+      await usersCommand.parseAsync(createArgs);
+      expect(printFormatted).toHaveBeenCalledWith(
+        expect.objectContaining({ success: true, id: 55, password: 'init-pw-1' }),
+        expect.anything()
+      );
+    });
+
+    it('prints the API payload plus password under --raw', async () => {
+      vi.mocked(getGlobalOptions).mockReturnValue({
+        output: 'json',
+        outputExplicit: true,
+        raw: true,
+      } as any);
+      await usersCommand.parseAsync(createArgs);
+      expect(printFormatted).toHaveBeenCalledWith(
+        { id: 55, email: 'j@t.com', password: 'init-pw-1' },
+        expect.anything()
+      );
+    });
+
+    it('prints only the id on stdout and the password on stderr with -o ids', async () => {
+      vi.mocked(getGlobalOptions).mockReturnValue({ output: 'ids', outputExplicit: true } as any);
+      await usersCommand.parseAsync(createArgs);
+      expect(consoleSpy.mock.calls).toEqual([[55]]);
+      expect(consoleErrorSpy.mock.calls.flat().join(' ')).toContain('init-pw-1');
+    });
+
+    it('prints only the id on stdout and the password on stderr when piped', async () => {
+      setTTYOverride({ stdout: false });
+      await usersCommand.parseAsync(createArgs);
+      expect(consoleSpy.mock.calls).toEqual([[55]]);
+      expect(consoleErrorSpy.mock.calls.flat().join(' ')).toContain('init-pw-1');
+    });
+
+    it('treats an implicit (config default) structured format like table', async () => {
+      vi.mocked(getGlobalOptions).mockReturnValue({ output: 'json', outputExplicit: false } as any);
+      await usersCommand.parseAsync(createArgs);
+      expect(printFormatted).not.toHaveBeenCalled();
+      expect(consoleSpy.mock.calls.flat().join(' ')).toContain('init-pw-1');
+    });
   });
 
   it('should accept --role as the only update field', async () => {
