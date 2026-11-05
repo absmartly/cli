@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { resolveByName } from './resolver.js';
+import { createNameResolver, resolveByName } from './resolver.js';
 
 const items = [
   { id: 1, name: 'Alpha' },
@@ -32,5 +32,28 @@ describe('resolveByName', () => {
   it('should trim input', () => {
     expect(resolveByName(items, '  2  ', 'Item')).toEqual({ id: 2, name: 'Beta' });
     expect(resolveByName(items, '  Beta  ', 'Item')).toEqual({ id: 2, name: 'Beta' });
+  });
+});
+
+describe('createNameResolver', () => {
+  it('matches resolveByName results and errors, including duplicates and numeric names', () => {
+    const items = [
+      { id: 1, name: 'one' },
+      { id: 1, name: 'duplicate id' },
+      { id: 2, name: 'Two' },
+      { id: 3, name: 'two' },
+      { id: 4, name: '005' },
+    ];
+    const indexed = createNameResolver(items);
+    for (const query of ['one', ' One ', '1', 'duplicate id', 'TWO', '2', '005', '99', 'missing']) {
+      let expected;
+      try {
+        expected = resolveByName(items, query, 'Metric');
+      } catch (error) {
+        expect(() => indexed(query, 'Metric')).toThrow((error as Error).message);
+        continue;
+      }
+      expect(indexed(query, 'Metric')).toBe(expected);
+    }
   });
 });

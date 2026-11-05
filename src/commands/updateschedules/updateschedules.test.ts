@@ -52,8 +52,22 @@ describe('update-schedules command', () => {
   it('should list update schedules', async () => {
     await updateSchedulesCommand.parseAsync(['node', 'test', 'list']);
 
-    expect(mockClient.listUpdateSchedules).toHaveBeenCalled();
+    expect(mockClient.listUpdateSchedules).toHaveBeenCalledWith({ items: 20, page: 1 });
     expect(printFormatted).toHaveBeenCalled();
+  });
+
+  it('should list update schedules with pagination', async () => {
+    await updateSchedulesCommand.parseAsync([
+      'node',
+      'test',
+      'list',
+      '--items',
+      '10',
+      '--page',
+      '2',
+    ]);
+
+    expect(mockClient.listUpdateSchedules).toHaveBeenCalledWith({ items: 10, page: 2 });
   });
 
   it('should get update schedule by id', async () => {

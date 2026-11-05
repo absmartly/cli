@@ -8,6 +8,28 @@ import {
   resolveDotPath,
 } from './format-helpers.js';
 
+const METRIC_ROLE_FIELDS = new Set([
+  'secondary_metrics',
+  'guardrail_metrics',
+  'exploratory_metrics',
+]);
+
+// `secondary_metrics` holds every non-primary metric, distinguished by `type`
+// (empty means secondary). Groups metric names into `<type>_metrics` columns.
+function metricNamesByRole(
+  metrics: Array<Record<string, unknown>> | undefined
+): Map<string, string[]> {
+  const byRole = new Map<string, string[]>();
+  for (const m of metrics ?? []) {
+    const field = `${(m.type as string) || 'secondary'}_metrics`;
+    const name = String((m.metric as Record<string, unknown>)?.name ?? m.metric_id);
+    const names = byRole.get(field);
+    if (names) names.push(name);
+    else byRole.set(field, [name]);
+  }
+  return byRole;
+}
+
 export function summarizeExperiment(
   exp: Record<string, unknown>,
   extraFields: string[] = [],
@@ -38,26 +60,8 @@ export function summarizeExperiment(
     percentages: exp.percentages ?? '',
   };
 
-  if (secondaryMetrics && secondaryMetrics.length > 0) {
-    const secondary = secondaryMetrics.filter((m) => m.type === 'secondary' || !m.type);
-    const guardrail = secondaryMetrics.filter((m) => m.type === 'guardrail');
-    const exploratory = secondaryMetrics.filter((m) => m.type === 'exploratory');
-
-    if (secondary.length > 0) {
-      summary.secondary_metrics = secondary
-        .map((m) => (m.metric as Record<string, unknown>)?.name ?? m.metric_id)
-        .join(', ');
-    }
-    if (guardrail.length > 0) {
-      summary.guardrail_metrics = guardrail
-        .map((m) => (m.metric as Record<string, unknown>)?.name ?? m.metric_id)
-        .join(', ');
-    }
-    if (exploratory.length > 0) {
-      summary.exploratory_metrics = exploratory
-        .map((m) => (m.metric as Record<string, unknown>)?.name ?? m.metric_id)
-        .join(', ');
-    }
+  for (const [field, names] of metricNamesByRole(secondaryMetrics)) {
+    if (METRIC_ROLE_FIELDS.has(field)) summary[field] = names.join(', ');
   }
 
   const previewVariants = exp.preview_variants as Array<Record<string, unknown>> | undefined;
@@ -231,8 +235,15 @@ export function summarizeExperimentRow(
   };
 
   const lookupFields = onlyFields ? [...extraFields, ...onlyFields] : extraFields;
+  const roleNames = lookupFields.some((f) => METRIC_ROLE_FIELDS.has(f.toLowerCase()))
+    ? metricNamesByRole(exp.secondary_metrics as Array<Record<string, unknown>> | undefined)
+    : undefined;
   for (const field of lookupFields) {
     if (field in row) continue;
+    if (roleNames && METRIC_ROLE_FIELDS.has(field.toLowerCase())) {
+      row[field] = roleNames.get(field.toLowerCase()) ?? [];
+      continue;
+    }
     if (field in exp) {
       row[field] = formatExtraField(field, exp[field]);
     } else if (field.includes('.')) {

@@ -42,7 +42,14 @@ const getCommand = new Command('get')
     withErrorHandling(async (id: WebhookId) => {
       const globalOptions = getGlobalOptions(getCommand);
       const client = await getAPIClientFromOptions(globalOptions);
-      const result = await getWebhook(client, { id });
+      const { show = [], exclude = [], showOnly } = globalOptions;
+      const result = await getWebhook(client, {
+        id,
+        show,
+        exclude,
+        showOnly,
+        raw: globalOptions.raw,
+      });
       printFormatted(result.data, globalOptions);
     })
   );

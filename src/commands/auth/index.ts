@@ -87,6 +87,11 @@ const loginCommand = new Command('login')
   .option('-k, --insecure', 'allow insecure TLS connections (self-signed certificates)')
   .action(
     withErrorHandling(async (endpointArg, options, command) => {
+      // login creates/deletes API keys remotely and writes credentials; it
+      // builds its own clients, so --dry-run cannot be honoured. Refuse.
+      if (getGlobalOptions(command).dryRun) {
+        throw new Error('auth login does not support --dry-run');
+      }
       const parentOpts = command.parent?.parent?.opts() || {};
       const apiKey = options.apiKey || parentOpts.apiKey;
       const rawEndpoint = endpointArg || options.endpoint || parentOpts.endpoint;

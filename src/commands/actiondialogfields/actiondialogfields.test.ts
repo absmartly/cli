@@ -51,8 +51,28 @@ describe('actiondialogfields command', () => {
   it('should list action dialog fields', async () => {
     await actionDialogFieldsCommand.parseAsync(['node', 'test', 'list']);
 
-    expect(mockClient.listExperimentActionDialogFields).toHaveBeenCalled();
+    expect(mockClient.listExperimentActionDialogFields).toHaveBeenCalledWith({
+      items: 20,
+      page: 1,
+    });
     expect(printFormatted).toHaveBeenCalled();
+  });
+
+  it('should list action dialog fields with pagination', async () => {
+    await actionDialogFieldsCommand.parseAsync([
+      'node',
+      'test',
+      'list',
+      '--items',
+      '10',
+      '--page',
+      '2',
+    ]);
+
+    expect(mockClient.listExperimentActionDialogFields).toHaveBeenCalledWith({
+      items: 10,
+      page: 2,
+    });
   });
 
   it('should get action dialog field by id', async () => {

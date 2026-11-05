@@ -1,9 +1,21 @@
 import type { APIClient } from '../../api-client/api-client.js';
 import type { CommandResult } from '../types.js';
 
-export async function listActionDialogFields(client: APIClient): Promise<CommandResult<unknown>> {
-  const data = await client.listExperimentActionDialogFields();
-  return { data };
+const DEFAULT_LIST_PAGE_SIZE = 20;
+
+export interface ListActionDialogFieldsParams {
+  items?: number | undefined;
+  page?: number | undefined;
+}
+
+export async function listActionDialogFields(
+  client: APIClient,
+  params: ListActionDialogFieldsParams = {}
+): Promise<CommandResult<unknown>> {
+  const items = params.items ?? DEFAULT_LIST_PAGE_SIZE;
+  const page = params.page ?? 1;
+  const data = await client.listExperimentActionDialogFields({ items, page });
+  return { data, pagination: { page, items, hasMore: (data as unknown[]).length >= items } };
 }
 
 export interface GetActionDialogFieldParams {

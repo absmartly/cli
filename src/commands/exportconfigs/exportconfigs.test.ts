@@ -55,8 +55,22 @@ describe('export-configs command', () => {
   it('should list export configs', async () => {
     await exportConfigsCommand.parseAsync(['node', 'test', 'list']);
 
-    expect(mockClient.listExportConfigs).toHaveBeenCalled();
+    expect(mockClient.listExportConfigs).toHaveBeenCalledWith({
+      statuses: undefined,
+      items: 20,
+      page: 1,
+    });
     expect(printFormatted).toHaveBeenCalled();
+  });
+
+  it('should list export configs with pagination', async () => {
+    await exportConfigsCommand.parseAsync(['node', 'test', 'list', '--items', '10', '--page', '2']);
+
+    expect(mockClient.listExportConfigs).toHaveBeenCalledWith({
+      statuses: undefined,
+      items: 10,
+      page: 2,
+    });
   });
 
   it('should get export config by id', async () => {

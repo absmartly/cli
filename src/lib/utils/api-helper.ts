@@ -4,6 +4,7 @@ import { getAPIKey, getOAuthToken } from '../config/keyring.js';
 import type { AuthConfig } from '../api/axios-adapter.js';
 import { Command } from 'commander';
 import chalk from 'chalk';
+import { DryRunError } from '../../api-client/http-client.js';
 import { formatOutput, type OutputFormat } from '../output/formatter.js';
 import { projectFields } from '../output/project-fields.js';
 import { isStdoutPiped } from './stdin.js';
@@ -85,6 +86,7 @@ export async function getAPIClientFromOptions(options: GlobalOptions): Promise<A
   return createAPIClient(endpoint, auth, {
     verbose: options.verbose ?? false,
     insecure: profile.api.insecure ?? false,
+    dryRun: options.dryRun ?? false,
     showRequest: options.showRequest ?? false,
     showResponse: options.showResponse ?? false,
     curl: options.curl ?? false,
@@ -126,6 +128,7 @@ export interface GlobalOptions {
   show?: string[] | undefined;
   exclude?: string[] | undefined;
   showOnly?: string[] | undefined;
+  dryRun?: boolean;
   showRequest?: boolean;
   showResponse?: boolean;
   curl?: boolean;
@@ -163,6 +166,9 @@ export function getGlobalOptions(cmd: Command): GlobalOptions {
   // so the user doesn't have to type both.
   const statusOnly = opts.statusOnly || false;
   const showResponse = opts.showResponse || statusOnly || false;
+  const dryRun = opts.dryRun || false;
+  const curl = opts.curl || false;
+  const showRequest = opts.showRequest || (dryRun && !curl) || false;
 
   const show = (opts.show as string[] | undefined) ?? [];
   const exclude = (opts.exclude as string[] | undefined) ?? [];
@@ -190,9 +196,10 @@ export function getGlobalOptions(cmd: Command): GlobalOptions {
     show,
     exclude,
     showOnly,
-    showRequest: opts.showRequest || false,
+    dryRun,
+    showRequest,
     showResponse,
-    curl: opts.curl || false,
+    curl,
     showSecrets: opts.showSecrets || false,
     headersOnly: opts.headersOnly || false,
     statusOnly,
@@ -312,6 +319,10 @@ export function withErrorHandling<TArgs extends unknown[]>(
     try {
       await fn(...args);
     } catch (error) {
+      if (error instanceof DryRunError) {
+        console.error(chalk.blue(error.message));
+        return;
+      }
       handleCommandError(error);
     }
   };

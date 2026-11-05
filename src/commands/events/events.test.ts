@@ -67,7 +67,7 @@ describe('events command', () => {
   it('should list events', async () => {
     await eventsCommand.parseAsync(['node', 'test', 'list']);
 
-    expect(mockClient.listEvents).toHaveBeenCalledWith({});
+    expect(mockClient.listEvents).toHaveBeenCalledWith({ take: 100 });
     expect(printFormatted).toHaveBeenCalled();
   });
 
@@ -101,6 +101,7 @@ describe('events command', () => {
     await eventsCommand.parseAsync(['node', 'test', 'list', '--valid-exposures']);
     expect(mockClient.listEvents).toHaveBeenCalledWith({
       filters: { effective_exposures: true },
+      take: 100,
     });
   });
 
@@ -108,6 +109,7 @@ describe('events command', () => {
     await eventsCommand.parseAsync(['node', 'test', 'list', '--invalid-exposures']);
     expect(mockClient.listEvents).toHaveBeenCalledWith({
       filters: { effective_exposures: false },
+      take: 100,
     });
   });
 

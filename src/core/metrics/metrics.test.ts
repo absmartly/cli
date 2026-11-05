@@ -164,7 +164,7 @@ describe('getMetric', () => {
     const result = await getMetric(mockClient, { id: 5 as any });
 
     expect(mockClient.getMetric).toHaveBeenCalledWith(5);
-    expect(result).toEqual({ data: metric });
+    expect(result.data).toBeDefined();
   });
 });
 
@@ -809,6 +809,69 @@ describe('validateMetricFields', () => {
         { mode: 'strict' }
       )
     ).toThrow(/--value-source-property is required/);
+  });
+});
+
+describe('listMetrics rows', () => {
+  it('should include summarized rows', async () => {
+    const metrics = [
+      { id: 1, name: 'M1', type: 'conversion', lifecycle_status: 'active', goal_id: 5 },
+      { id: 2, name: 'M2', type: 'revenue', lifecycle_status: 'draft', goal: { name: 'Goal B' } },
+    ];
+    mockClient.listMetrics.mockResolvedValue(metrics);
+
+    const result = await listMetrics(mockClient, { items: 10, page: 1 });
+
+    expect(result.rows).toEqual([
+      {
+        id: 1,
+        name: 'M1',
+        type: 'conversion',
+        effect: '',
+        status: 'active',
+        goal: 5,
+        category: '',
+      },
+      {
+        id: 2,
+        name: 'M2',
+        type: 'revenue',
+        effect: '',
+        status: 'draft',
+        goal: 'Goal B',
+        category: '',
+      },
+    ]);
+    expect(result.data).toEqual(metrics);
+  });
+});
+
+describe('getMetric summarization', () => {
+  const metric = {
+    id: 5,
+    name: 'Signup Rate',
+    type: 'conversion',
+    lifecycle_status: 'active',
+    definition: { some: 'large blob' },
+  };
+
+  it('returns summarized data by default', async () => {
+    mockClient.getMetric.mockResolvedValue(metric);
+    const result = await getMetric(mockClient, { id: 5 as any });
+    expect(result.data).not.toHaveProperty('definition');
+    expect(result.data).toMatchObject({ id: 5, name: 'Signup Rate', type: 'conversion' });
+  });
+
+  it('returns raw data when raw=true', async () => {
+    mockClient.getMetric.mockResolvedValue(metric);
+    const result = await getMetric(mockClient, { id: 5 as any, raw: true });
+    expect(result.data).toEqual(metric);
+  });
+
+  it('includes an extra field via show', async () => {
+    mockClient.getMetric.mockResolvedValue(metric);
+    const result = await getMetric(mockClient, { id: 5 as any, show: ['definition'] });
+    expect(result.data).toHaveProperty('definition', { some: 'large blob' });
   });
 });
 

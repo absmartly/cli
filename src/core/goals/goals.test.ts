@@ -50,6 +50,21 @@ describe('listGoals', () => {
 
     expect(result.pagination!.hasMore).toBe(true);
   });
+
+  it('should include summarized rows', async () => {
+    const goals = [
+      { id: 1, name: 'G1', archived: false, tags: [{ goal_tag: { tag: 'core' } }] },
+      { id: 2, name: 'G2', archived: true, tags: [] },
+    ];
+    mockClient.listGoals.mockResolvedValue(goals);
+
+    const result = await listGoals(mockClient, { items: 10, page: 1 });
+
+    expect(result.rows).toEqual([
+      { id: 1, name: 'G1', tags: 'core', archived: false },
+      { id: 2, name: 'G2', tags: '', archived: true },
+    ]);
+  });
 });
 
 describe('getGoal', () => {
@@ -60,7 +75,19 @@ describe('getGoal', () => {
     const result = await getGoal(mockClient, { id: 5 as any });
 
     expect(mockClient.getGoal).toHaveBeenCalledWith(5);
-    expect(result).toEqual({ data: goal });
+    expect(result.data).toMatchObject({ id: 5, name: 'Goal' });
+  });
+
+  it('should summarize by default and honor raw', async () => {
+    const goal = { id: 5, name: 'Goal', archived: false, big_field: 'lots of data' };
+    mockClient.getGoal.mockResolvedValue(goal);
+
+    const summarized = await getGoal(mockClient, { id: 5 as any });
+    expect(summarized.data).not.toHaveProperty('big_field');
+    expect(summarized.data).toMatchObject({ id: 5, name: 'Goal' });
+
+    const raw = await getGoal(mockClient, { id: 5 as any, raw: true });
+    expect(raw.data).toEqual(goal);
   });
 });
 

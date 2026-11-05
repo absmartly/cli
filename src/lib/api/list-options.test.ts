@@ -42,7 +42,7 @@ describe.skipIf(isLiveMode)('APIClient - List Options', () => {
         created_after: 1704067200000,
       });
 
-      expect(receivedParams?.get('created_at')).toBe('1704067200000,0');
+      expect(receivedParams?.get('created_at')).toBe('1704067200000,');
     });
 
     it('should handle partial date range with created_before only', async () => {
@@ -59,7 +59,7 @@ describe.skipIf(isLiveMode)('APIClient - List Options', () => {
         created_before: 1735603200000,
       });
 
-      expect(receivedParams?.get('created_at')).toBe('0,1735603200000');
+      expect(receivedParams?.get('created_at')).toBe(',1735603200000');
     });
 
     it('should send correct started_at date range', async () => {

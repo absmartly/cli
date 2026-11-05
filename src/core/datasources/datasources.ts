@@ -2,9 +2,21 @@ import type { APIClient } from '../../api-client/api-client.js';
 import type { DatasourceId } from '../../lib/api/branded-types.js';
 import type { CommandResult } from '../types.js';
 
-export async function listDatasources(client: APIClient): Promise<CommandResult<unknown>> {
-  const data = await client.listDatasources();
-  return { data };
+const DEFAULT_LIST_PAGE_SIZE = 20;
+
+export interface ListDatasourcesParams {
+  items?: number | undefined;
+  page?: number | undefined;
+}
+
+export async function listDatasources(
+  client: APIClient,
+  params: ListDatasourcesParams = {}
+): Promise<CommandResult<unknown>> {
+  const items = params.items ?? DEFAULT_LIST_PAGE_SIZE;
+  const page = params.page ?? 1;
+  const data = await client.listDatasources({ items, page });
+  return { data, pagination: { page, items, hasMore: (data as unknown[]).length >= items } };
 }
 
 export interface GetDatasourceParams {

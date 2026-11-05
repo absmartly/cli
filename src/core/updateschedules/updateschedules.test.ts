@@ -16,11 +16,17 @@ describe('updateschedules', () => {
     deleteUpdateSchedule: vi.fn(),
   };
 
-  it('should list update schedules', async () => {
+  it('should default items/page and forward to client', async () => {
     mockClient.listUpdateSchedules.mockResolvedValue([{ id: 1 }]);
-    const result = await listUpdateSchedules(mockClient as any);
-    expect(mockClient.listUpdateSchedules).toHaveBeenCalled();
+    const result = await listUpdateSchedules(mockClient as any, {});
+    expect(mockClient.listUpdateSchedules).toHaveBeenCalledWith({ items: 20, page: 1 });
     expect(result.data).toEqual([{ id: 1 }]);
+  });
+
+  it('should forward explicit items/page', async () => {
+    mockClient.listUpdateSchedules.mockResolvedValue([]);
+    await listUpdateSchedules(mockClient as any, { items: 5, page: 3 });
+    expect(mockClient.listUpdateSchedules).toHaveBeenCalledWith({ items: 5, page: 3 });
   });
 
   it('should get update schedule by id', async () => {

@@ -19,6 +19,7 @@ vi.mock('../output/formatter', () => ({
   formatOutput: vi.fn((data) => JSON.stringify(data)),
 }));
 
+import { DryRunError } from '../../api-client/http-client.js';
 import {
   getAPIClientFromOptions,
   getGlobalOptions,
@@ -168,6 +169,24 @@ describe('API Helper', () => {
       );
     });
 
+    it('should pass dryRun flag to client', async () => {
+      (loadConfig as any).mockReturnValue({ 'default-profile': 'default' });
+      (getProfile as any).mockReturnValue({
+        api: { endpoint: 'https://api.absmartly.com/v1' },
+        expctld: { endpoint: 'https://ctl.absmartly.io/v1' },
+      });
+      (getAPIKey as any).mockResolvedValue('test-key');
+      (createAPIClient as any).mockReturnValue({});
+
+      await getAPIClientFromOptions({ dryRun: true });
+
+      expect(createAPIClient).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.any(Object),
+        expect.objectContaining({ dryRun: true })
+      );
+    });
+
     it('should use default profile when not specified', async () => {
       (loadConfig as any).mockReturnValue({
         'default-profile': 'production',
@@ -200,7 +219,10 @@ describe('API Helper', () => {
         .option('--full', 'full')
         .option('--show <fields...>', 'show')
         .option('--exclude <fields...>', 'exclude')
-        .option('--show-only <fields...>', 'show only');
+        .option('--show-only <fields...>', 'show only')
+        .option('--show-request', 'show request')
+        .option('--dry-run', 'dry run')
+        .option('--curl', 'curl');
     });
 
     it('should parse options with defaults', () => {
@@ -251,6 +273,39 @@ describe('API Helper', () => {
       const options = getGlobalOptions(mockCommand);
       expect(options.statusOnly).toBe(false);
       expect(options.showResponse).toBe(false);
+    });
+
+    it('parses --dry-run and defaults it to false', () => {
+      const options = getGlobalOptions(mockCommand);
+      expect(options.dryRun).toBe(false);
+    });
+
+    it('--dry-run implies --show-request when --curl is not set', () => {
+      mockCommand.setOptionValue('dryRun', true);
+
+      const options = getGlobalOptions(mockCommand);
+      expect(options.dryRun).toBe(true);
+      expect(options.showRequest).toBe(true);
+    });
+
+    it('--dry-run does not force --show-request when --curl is explicitly set', () => {
+      mockCommand.setOptionValue('dryRun', true);
+      mockCommand.setOptionValue('curl', true);
+
+      const options = getGlobalOptions(mockCommand);
+      expect(options.dryRun).toBe(true);
+      expect(options.curl).toBe(true);
+      expect(options.showRequest).toBe(false);
+    });
+
+    it('--show-request stays on with --dry-run and --curl both set', () => {
+      mockCommand.setOptionValue('dryRun', true);
+      mockCommand.setOptionValue('curl', true);
+      mockCommand.setOptionValue('showRequest', true);
+
+      const options = getGlobalOptions(mockCommand);
+      expect(options.showRequest).toBe(true);
+      expect(options.curl).toBe(true);
     });
 
     it('parses show/exclude/show-only into arrays (defaulting show/exclude to [])', () => {
@@ -651,6 +706,47 @@ describe('API Helper', () => {
       expect(fn).toHaveBeenCalled();
       expect(consoleErrorSpy).not.toHaveBeenCalled();
       expect(processExitSpy).not.toHaveBeenCalled();
+    });
+
+    it('prints the dry-run confirmation to stderr, leaves stdout empty, and does not exit(1)', async () => {
+      const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const savedExitCode = process.exitCode;
+      process.exitCode = undefined;
+      try {
+        const wrapped = withErrorHandling(async () => {
+          throw new DryRunError('PUT', '/experiments/1/stop');
+        });
+
+        await wrapped();
+
+        expect(processExitSpy).not.toHaveBeenCalled();
+        expect(process.exitCode).not.toBe(1);
+        expect(consoleErrorSpy).toHaveBeenCalledTimes(1);
+        expect(String(consoleErrorSpy.mock.calls[0]?.[0])).toContain('PUT /experiments/1/stop');
+        expect(consoleLogSpy).not.toHaveBeenCalled();
+      } finally {
+        process.exitCode = savedExitCode;
+        consoleLogSpy.mockRestore();
+      }
+    });
+
+    it('keeps stdout empty for a DryRunError even with an explicit -o json', async () => {
+      const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+      try {
+        const wrapped = withErrorHandling(async () => {
+          throw new DryRunError('POST', '/experiments');
+        });
+
+        await wrapped();
+
+        expect(consoleLogSpy).not.toHaveBeenCalled();
+        expect(writeSpy).not.toHaveBeenCalled();
+        expect(String(consoleErrorSpy.mock.calls[0]?.[0])).toContain('POST /experiments');
+      } finally {
+        writeSpy.mockRestore();
+        consoleLogSpy.mockRestore();
+      }
     });
   });
 

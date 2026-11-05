@@ -5,6 +5,7 @@ import { buildExperimentPayload } from './builder.js';
 import type { ExperimentTemplate } from '../template/parser.js';
 import type { ResolverContext } from './resolver.js';
 import { loadOpenAPISpec, validateRequestStrict } from 'absmartly-api-mocks/validation';
+import { bySize, expectLinearAsync } from '../../test/helpers/timing.js';
 
 const validationEntry = fileURLToPath(import.meta.resolve('absmartly-api-mocks/validation'));
 const mocksDir = resolve(dirname(validationEntry), '..', '..');
@@ -35,6 +36,60 @@ describe('buildExperimentPayload', () => {
     const variants = payload.variants as Array<Record<string, unknown>>;
     expect(variants[0].name).toBe('control');
     expect(variants[1].name).toBe('treatment');
+  });
+
+  it('should omit experiment analysis fields from feature payloads', async () => {
+    const template: ExperimentTemplate = {
+      name: 'feature_flag',
+      type: 'feature',
+      analysis_type: 'group_sequential',
+      required_alpha: '0.05',
+      required_power: '0.9',
+      baseline_participants: '100',
+      minimum_detectable_effect: '5.0',
+      baseline_primary_metric_mean: '42.5',
+      baseline_primary_metric_stdev: '10.2',
+      group_sequential_futility_type: 'binding',
+      group_sequential_analysis_count: '3',
+      group_sequential_min_analysis_interval: '1d',
+      group_sequential_first_analysis_interval: '7d',
+      group_sequential_max_duration_interval: '6w',
+    };
+    const { payload } = await buildExperimentPayload(template, baseContext);
+    for (const field of [
+      'analysis_type',
+      'required_alpha',
+      'required_power',
+      'baseline_participants_per_day',
+      'minimum_detectable_effect',
+      'baseline_primary_metric_mean',
+      'baseline_primary_metric_stdev',
+      'group_sequential_futility_type',
+      'group_sequential_analysis_count',
+      'group_sequential_min_analysis_interval',
+      'group_sequential_first_analysis_interval',
+      'group_sequential_max_duration_interval',
+    ]) {
+      expect(payload).not.toHaveProperty(field);
+    }
+  });
+
+  it('should flatten feature metrics into deduplicated guardrails and clear the primary metric', async () => {
+    const { payload } = await buildExperimentPayload(
+      {
+        name: 'feature_metrics',
+        type: 'feature',
+        primary_metric: 'clicks',
+        secondary_metrics: ['revenue', 'clicks'],
+        guardrail_metrics: ['revenue'],
+      },
+      baseContext
+    );
+    expect(payload.primary_metric).toEqual({ metric_id: null });
+    expect(payload.secondary_metrics).toEqual([
+      { metric_id: 1, type: 'guardrail', order_index: 0 },
+      { metric_id: 2, type: 'guardrail', order_index: 1 },
+    ]);
   });
 
   it('should resolve application by name', async () => {
@@ -163,6 +218,112 @@ describe('buildExperimentPayload', () => {
     };
     const { payload } = await buildExperimentPayload(template, baseContext);
     expect(payload.owners).toEqual([{ user_id: 42 }]);
+  });
+
+  describe('owner and user custom field resolution', () => {
+    const users = [
+      { id: 1, email: 'ann@example.com', first_name: 'Ann', last_name: 'Lee' },
+      { id: 2, email: 'bob@example.com', first_name: 'Ann', last_name: 'Lee' },
+      { id: 3, email: 'ANN.lee@example.com', first_name: 'Cy', last_name: 'Ho' },
+    ];
+
+    it('resolves owners by email, by "Name <email>" and by name, case-insensitively', async () => {
+      const { payload, warnings } = await buildExperimentPayload(
+        { name: 'exp', owners: ['BOB@example.com', 'X <ann.lee@EXAMPLE.com>', '7'] },
+        { ...baseContext, users }
+      );
+      expect(payload.owners).toEqual([{ user_id: 2 }, { user_id: 3 }, { user_id: 7 }]);
+      expect(warnings).toEqual([]);
+    });
+
+    it('warns with matches in input order when a name is ambiguous', async () => {
+      const { payload, warnings } = await buildExperimentPayload(
+        { name: 'exp', owners: ['ann lee', 'nobody'] },
+        { ...baseContext, users }
+      );
+      expect(payload.owners).toBeUndefined();
+      expect(warnings).toContain(
+        'Owner "ann lee" matches multiple users: ann@example.com (id: 1), bob@example.com (id: 2). Use email to disambiguate.'
+      );
+      expect(warnings).toContain('Owner "nobody" not found, skipping');
+    });
+
+    const reviewerField = [
+      { id: 9, title: 'Reviewers', type: 'user', custom_section: { type: 'test' } },
+    ];
+    const reviewers = async (value: string, ctxUsers = users) => {
+      const { payload } = await buildExperimentPayload(
+        { name: 'exp', custom_fields: { Reviewers: value } },
+        { ...baseContext, users: ctxUsers, customSectionFields: reviewerField }
+      );
+      const values = payload.custom_section_field_values as Record<string, { value: string }>;
+      return JSON.parse(values['9']!.value);
+    };
+
+    it('resolves user custom fields by email case-insensitively, first match wins', async () => {
+      const dupes = [...users, { id: 4, email: 'ANN@example.com' }];
+      expect(
+        await reviewers(' Ann@Example.com ,user:7, nobody@x.com,BOB@example.com', dupes)
+      ).toEqual({
+        selected: [{ userId: 1 }, { userId: 7 }, { userId: 2 }],
+      });
+    });
+
+    it('lowercases each reference once for special-casing characters', async () => {
+      // Users and reference length both grow with n, so lowercasing each
+      // reference once per user (the old code) is quadratic while lowercasing
+      // it once is linear.
+      const usersOf = bySize((n) =>
+        Array.from({ length: n }, (_, i) => ({ id: i, email: `u${i}@example.com` }))
+      );
+      for (const ch of ['\u0130', '\u03A3']) {
+        const refsOf = bySize((n) => Array.from({ length: 50 }, (_, i) => ch.repeat(n) + i));
+        await expectLinearAsync(async (n) => {
+          await buildExperimentPayload(
+            { name: 'exp', owners: refsOf(n) },
+            { ...baseContext, users: usersOf(n) }
+          );
+          await reviewers(refsOf(n).join(','), usersOf(n));
+        }, 1_000);
+        expect(await reviewers(refsOf(1_000).join(','), usersOf(1_000))).toEqual({ selected: [] });
+      }
+      // Matching still lowercases with full Unicode case mapping.
+      expect(
+        await reviewers('\u0130\u03A3@EXAMPLE.COM', [{ id: 5, email: 'i\u0307\u03C2@example.com' }])
+      ).toEqual({ selected: [{ userId: 5 }] });
+    });
+
+    it('resolves many owners against many users in linear time', async () => {
+      const usersOf = bySize((n) =>
+        Array.from({ length: n }, (_, i) => ({
+          id: i,
+          email: `u${i}@example.com`,
+          first_name: 'U',
+          last_name: String(i),
+        }))
+      );
+      const build = (n: number) =>
+        buildExperimentPayload(
+          { name: 'exp', owners: usersOf(n).map((u) => u.email) },
+          { ...baseContext, users: usersOf(n) }
+        );
+      await expectLinearAsync(build, 5_000);
+      const { payload } = await build(20_000);
+      expect((payload.owners as unknown[]).length).toBe(20_000);
+    });
+  });
+
+  it('numbers screenshots by position when variants have no explicit number', async () => {
+    const variants = Array.from({ length: 3 }, (_, i) => ({
+      name: `v${i}`,
+      screenshot_id: 10 + i,
+    }));
+    const { payload } = await buildExperimentPayload({ name: 'exp', variants }, baseContext);
+    expect(payload.variant_screenshots).toEqual([
+      { variant: 0, screenshot_file_upload_id: 10 },
+      { variant: 1, screenshot_file_upload_id: 11 },
+      { variant: 2, screenshot_file_upload_id: 12 },
+    ]);
   });
 
   it('should include group_sequential fields only when analysis_type is group_sequential', async () => {

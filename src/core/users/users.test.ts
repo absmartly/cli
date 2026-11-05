@@ -10,6 +10,7 @@ const mockClient = {
   archiveUser: vi.fn(),
   createUser: vi.fn(),
   getUser: vi.fn(),
+  listRoles: vi.fn(),
   listUsers: vi.fn(),
   resetUserPassword: vi.fn(),
   updateUser: vi.fn(),
@@ -77,6 +78,75 @@ describe('createUser', () => {
   });
 });
 
+describe('createUser --role', () => {
+  it('resolves a role name and sends roles on create', async () => {
+    mockClient.listRoles.mockResolvedValueOnce([
+      { id: 3, name: 'User' },
+      { id: 7, name: 'API User' },
+    ]);
+    mockClient.createUser.mockResolvedValue({ id: 171 });
+
+    await createUser(mockClient, { email: 'a@b.com', name: 'John Doe', role: 'User' });
+
+    expect(mockClient.listRoles).toHaveBeenCalledWith({ search: 'User', items: 200 });
+    expect(mockClient.createUser).toHaveBeenCalledWith({
+      email: 'a@b.com',
+      first_name: 'John',
+      last_name: 'Doe',
+      roles: [{ role_id: 3 }],
+    });
+  });
+
+  it('accepts a numeric role id', async () => {
+    mockClient.listRoles.mockResolvedValueOnce([{ id: 1, name: 'FullAdmin' }]);
+    mockClient.createUser.mockResolvedValue({ id: 172 });
+
+    await createUser(mockClient, { email: 'a@b.com', name: 'John Doe', role: '1' });
+
+    expect(mockClient.listRoles).toHaveBeenCalledWith({ ids: '1', items: 200 });
+    expect(mockClient.createUser).toHaveBeenCalledWith(
+      expect.objectContaining({ roles: [{ role_id: 1 }] })
+    );
+  });
+
+  it('does not create the user when the role name is unknown', async () => {
+    mockClient.listRoles
+      .mockResolvedValueOnce([{ id: 7, name: 'API User' }])
+      .mockResolvedValueOnce([
+        { id: 1, name: 'FullAdmin' },
+        { id: 3, name: 'User' },
+      ]);
+
+    await expect(
+      createUser(mockClient, { email: 'a@b.com', name: 'John Doe', role: 'Usr' })
+    ).rejects.toThrow(/No role found matching name "Usr".*Available roles: FullAdmin, User/s);
+    expect(mockClient.createUser).not.toHaveBeenCalled();
+  });
+
+  it('keeps the unknown-role error when the suggestions lookup fails', async () => {
+    mockClient.listRoles.mockResolvedValueOnce([]).mockRejectedValueOnce(new Error('network down'));
+
+    const err = await createUser(mockClient, {
+      email: 'a@b.com',
+      name: 'John Doe',
+      role: 'Usr',
+    }).catch((e: Error) => e);
+
+    expect((err as Error).message).toMatch(/No role found matching name "Usr"/);
+    expect((err as Error).message).not.toMatch(/Available roles/);
+    expect(mockClient.createUser).not.toHaveBeenCalled();
+  });
+
+  it('omits roles when --role is not given', async () => {
+    mockClient.createUser.mockResolvedValue({ id: 173 });
+
+    await createUser(mockClient, { email: 'a@b.com', name: 'John Doe' });
+
+    expect(mockClient.listRoles).not.toHaveBeenCalled();
+    expect(mockClient.createUser.mock.calls[0]![0]).not.toHaveProperty('roles');
+  });
+});
+
 describe('getUser', () => {
   it('should get user by id', async () => {
     const user = { id: 5, email: 'a@b.com' };
@@ -85,7 +155,31 @@ describe('getUser', () => {
     const result = await getUser(mockClient, { id: 5 as any });
 
     expect(mockClient.getUser).toHaveBeenCalledWith(5);
-    expect(result).toEqual({ data: user });
+    expect(result.data).toMatchObject({ id: 5, email: 'a@b.com' });
+  });
+});
+
+describe('getUser summarization', () => {
+  const user = {
+    id: 5,
+    email: 'u@x.com',
+    first_name: 'U',
+    last_name: 'Ser',
+    archived: false,
+    roles: [{ id: 1, permissions: ['huge array'] }],
+  };
+
+  it('returns summarized data by default', async () => {
+    mockClient.getUser.mockResolvedValue(user);
+    const result = await getUser(mockClient, { id: 5 as any });
+    expect(result.data).not.toHaveProperty('roles');
+    expect(result.data).toMatchObject({ id: 5, email: 'u@x.com', name: 'U Ser' });
+  });
+
+  it('returns raw data when raw=true', async () => {
+    mockClient.getUser.mockResolvedValue(user);
+    const result = await getUser(mockClient, { id: 5 as any, raw: true });
+    expect(result.data).toEqual(user);
   });
 });
 
@@ -146,6 +240,39 @@ describe('listUsers', () => {
   });
 });
 
+describe('listUsers rows', () => {
+  it('should include summarized rows', async () => {
+    const users = [
+      { id: 1, email: 'a@x.com', first_name: 'A', last_name: 'One', archived: false },
+      { id: 2, email: 'b@x.com', first_name: 'B', last_name: 'Two', archived: true },
+    ];
+    mockClient.listUsers.mockResolvedValue(users);
+
+    const result = await listUsers(mockClient, { items: 10, page: 1 });
+
+    expect(result.rows).toEqual([
+      {
+        id: 1,
+        email: 'a@x.com',
+        name: 'A One',
+        department: '',
+        job_title: '',
+        archived: false,
+        last_login: '',
+      },
+      {
+        id: 2,
+        email: 'b@x.com',
+        name: 'B Two',
+        department: '',
+        job_title: '',
+        archived: true,
+        last_login: '',
+      },
+    ]);
+  });
+});
+
 describe('resetUserPassword', () => {
   it('should reset password and return new password', async () => {
     mockClient.resetUserPassword.mockResolvedValue({ password: 'newpass123' });
@@ -168,6 +295,49 @@ describe('updateUser', () => {
       last_name: 'Smith',
     });
     expect(result).toEqual({ data: undefined });
+  });
+
+  it('treats --role alone as a valid update and sends roles', async () => {
+    mockClient.listRoles.mockResolvedValueOnce([{ id: 1, name: 'FullAdmin' }]);
+    mockClient.updateUser.mockResolvedValue(undefined);
+
+    await updateUser(mockClient, { id: 171 as any, role: 'FullAdmin' });
+
+    expect(mockClient.updateUser).toHaveBeenCalledWith(171, { roles: [{ role_id: 1 }] });
+  });
+
+  it('resolves comma-separated role names and ids together', async () => {
+    mockClient.listRoles
+      .mockResolvedValueOnce([{ id: 2, name: 'Viewer' }])
+      .mockResolvedValueOnce([{ id: 1, name: 'FullAdmin' }]);
+    mockClient.updateUser.mockResolvedValue(undefined);
+
+    await updateUser(mockClient, { id: 171 as any, name: 'Jane Smith', role: 'FullAdmin, 2' });
+
+    expect(mockClient.updateUser).toHaveBeenCalledWith(171, {
+      first_name: 'Jane',
+      last_name: 'Smith',
+      roles: [{ role_id: 2 }, { role_id: 1 }],
+    });
+  });
+
+  it('does not update the user when the role name is unknown', async () => {
+    mockClient.listRoles
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ id: 1, name: 'FullAdmin' }]);
+
+    await expect(updateUser(mockClient, { id: 171 as any, role: 'Nope' })).rejects.toThrow(
+      /No role found matching name "Nope"/
+    );
+    expect(mockClient.updateUser).not.toHaveBeenCalled();
+  });
+
+  it('errors when --role has no usable values', async () => {
+    await expect(updateUser(mockClient, { id: 171 as any, role: ' , ' })).rejects.toThrow(
+      /--role was given no usable values/
+    );
+    expect(mockClient.listRoles).not.toHaveBeenCalled();
+    expect(mockClient.updateUser).not.toHaveBeenCalled();
   });
 
   it('should throw when no fields provided', async () => {

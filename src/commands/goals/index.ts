@@ -9,11 +9,7 @@ import {
 } from '../../lib/utils/api-helper.js';
 import { parseGoalId } from '../../lib/utils/validators.js';
 import type { GoalId } from '../../lib/api/branded-types.js';
-import {
-  applyShowExclude,
-  summarizeGoal,
-  summarizeGoalRow,
-} from '../../api-client/entity-summary.js';
+import { summarizeGoalRow } from '../../api-client/entity-summary.js';
 import { createListCommand } from '../../lib/utils/list-command.js';
 import { getGoal } from '../../core/goals/get.js';
 import { createGoal } from '../../core/goals/create.js';
@@ -47,17 +43,8 @@ const getCommand = new Command('get')
       const client = await getAPIClientFromOptions(globalOptions);
       const { show = [], exclude = [], showOnly } = globalOptions;
 
-      const result = await getGoal(client, { id });
-      const data = globalOptions.raw
-        ? result.data
-        : applyShowExclude(
-            summarizeGoal(result.data as Record<string, unknown>),
-            result.data as Record<string, unknown>,
-            show,
-            exclude,
-            showOnly
-          );
-      printFormatted(data, globalOptions);
+      const result = await getGoal(client, { id, show, exclude, showOnly, raw: globalOptions.raw });
+      printFormatted(result.data, globalOptions);
     })
   );
 

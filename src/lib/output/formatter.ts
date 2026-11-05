@@ -86,6 +86,18 @@ export function formatOutput(
   }
 }
 
+// Rows can carry different optional fields (e.g. --show columns absent on some
+// rows), so columns come from every row, in first-seen order.
+function unionKeys(rows: unknown[]): string[] {
+  const keys = new Set<string>();
+  for (const row of rows) {
+    if (typeof row === 'object' && row !== null) {
+      for (const key of Object.keys(row)) keys.add(key);
+    }
+  }
+  return [...keys];
+}
+
 export function formatTable(data: unknown, options: OutputOptions = {}): string {
   if (Array.isArray(data)) {
     if (data.length === 0) {
@@ -97,7 +109,7 @@ export function formatTable(data: unknown, options: OutputOptions = {}): string 
       return formatPlain(data, options);
     }
 
-    const keys = Object.keys(firstItem);
+    const keys = unionKeys(data);
     const table = new Table({
       head: keys.map((k) => (options.noColor ? k : chalk.bold(k))),
       style: {
@@ -137,11 +149,12 @@ export function formatTable(data: unknown, options: OutputOptions = {}): string 
 
 export function formatPlain(data: unknown, options: OutputOptions = {}): string {
   if (Array.isArray(data)) {
+    const keys = unionKeys(data);
     return data
       .map((item) => {
         if (typeof item === 'object' && item !== null) {
-          return Object.values(item)
-            .map((v) => formatValue(v, options))
+          return keys
+            .map((key) => formatValue((item as Record<string, unknown>)[key], options))
             .join('\t');
         }
         return formatValue(item, options);
@@ -167,7 +180,7 @@ export function formatMarkdown(data: unknown, options: OutputOptions = {}): stri
       return data.map((item) => formatValue(item, options)).join('\n');
     }
 
-    const keys = Object.keys(firstItem);
+    const keys = unionKeys(data);
     let output = '| ' + keys.join(' | ') + ' |\n';
     output += '| ' + keys.map(() => '---').join(' | ') + ' |\n';
 
@@ -264,7 +277,12 @@ export function formatValue(value: unknown, options: OutputOptions = {}): string
     }
     return text;
   }
-  if (Array.isArray(value)) return value.map((v) => formatValue(v, options)).join(', ');
+  if (Array.isArray(value)) {
+    // One item per line in cell-based formats keeps multi-value columns narrow;
+    // line-oriented formats (plain, markdown) need them on a single line.
+    const separator = options.format === 'table' || options.format === 'vertical' ? '\n' : ', ';
+    return value.map((v) => formatValue(v, options)).join(separator);
+  }
   if (isObject(value)) {
     const summary = summarizeObjectValue(value);
     if (summary !== null) return summary;

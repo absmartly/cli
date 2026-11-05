@@ -9,6 +9,7 @@ import {
 } from '../../lib/utils/api-helper.js';
 import { parseDatasourceId, validateJSON } from '../../lib/utils/validators.js';
 import { readStdinText } from '../../lib/utils/stdin.js';
+import { addPaginationOptions, printPaginationFooter } from '../../lib/utils/pagination.js';
 import type { DatasourceId } from '../../lib/api/branded-types.js';
 import {
   listDatasources as coreListDatasources,
@@ -33,12 +34,20 @@ export const datasourcesCommand = new Command('datasources')
   .aliases(['datasource', 'ds'])
   .description('Datasource management');
 
-const listCommand = new Command('list').description('List datasources').action(
-  withErrorHandling(async () => {
+const listCommand = addPaginationOptions(
+  new Command('list').description('List datasources')
+).action(
+  withErrorHandling(async (options) => {
     const globalOptions = getGlobalOptions(listCommand);
     const client = await getAPIClientFromOptions(globalOptions);
-    const result = await coreListDatasources(client);
+    const result = await coreListDatasources(client, { items: options.items, page: options.page });
     printFormatted(result.data, globalOptions);
+    printPaginationFooter(
+      (result.data as unknown[]).length,
+      options.items,
+      options.page,
+      globalOptions.output as string
+    );
   })
 );
 

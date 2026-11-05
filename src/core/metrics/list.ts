@@ -1,6 +1,7 @@
 import type { APIClient } from '../../api-client/api-client.js';
 import type { CommandResult } from '../types.js';
 import { resolveOwnerIds, resolveTeamIds } from '../resolve.js';
+import { summarizeMetricRow } from '../../api-client/entity-summary.js';
 
 export { resolveOwnerIds, resolveTeamIds };
 
@@ -41,6 +42,7 @@ export async function listMetrics(
 
   return {
     data,
+    rows: (data as Array<Record<string, unknown>>).map(summarizeMetricRow),
     pagination: { page: params.page, items: params.items, hasMore: data.length >= params.items },
   };
 }

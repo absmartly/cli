@@ -56,6 +56,14 @@ async function performOAuthBrowserFlow(
     await page.fill('input[type="password"]', LIVE_PASSWORD!);
     await page.click('button[type="submit"]');
 
+    // Newer servers ask the user to approve the client after login. Older
+    // ones redirect straight to the callback, which settles codePromise first.
+    const approve = page.getByRole('button', { name: 'Approve' });
+    await Promise.race([
+      approve.click({ timeout: 15000 }).catch(() => {}),
+      codePromise.catch(() => {}),
+    ]);
+
     capturedCode = await codePromise;
 
     if (!capturedCode) {

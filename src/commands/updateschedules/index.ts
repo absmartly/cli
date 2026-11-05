@@ -6,6 +6,7 @@ import {
   printResult,
   withErrorHandling,
 } from '../../lib/utils/api-helper.js';
+import { addPaginationOptions, printPaginationFooter } from '../../lib/utils/pagination.js';
 import { parseUpdateScheduleId, validateJSON } from '../../lib/utils/validators.js';
 import type { UpdateScheduleId } from '../../lib/api/branded-types.js';
 import {
@@ -20,12 +21,23 @@ export const updateSchedulesCommand = new Command('update-schedules')
   .aliases(['updateschedules'])
   .description('Experiment update schedule management');
 
-const listCommand = new Command('list').description('List experiment update schedules').action(
-  withErrorHandling(async () => {
+const listCommand = addPaginationOptions(
+  new Command('list').description('List experiment update schedules')
+).action(
+  withErrorHandling(async (options) => {
     const globalOptions = getGlobalOptions(listCommand);
     const client = await getAPIClientFromOptions(globalOptions);
-    const result = await listUpdateSchedules(client);
+    const result = await listUpdateSchedules(client, {
+      items: options.items,
+      page: options.page,
+    });
     printFormatted(result.data, globalOptions);
+    printPaginationFooter(
+      (result.data as unknown[]).length,
+      options.items,
+      options.page,
+      globalOptions.output as string
+    );
   })
 );
 

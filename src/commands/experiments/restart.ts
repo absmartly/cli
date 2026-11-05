@@ -35,9 +35,7 @@ export const restartCommand = new Command('restart')
 
 registerCustomFieldOptions(restartCommand, getDefaultType());
 
-restartCommand
-  .option('-i, --interactive', 'interactive step-by-step editor')
-  .option('--dry-run', 'show the changes without restarting');
+restartCommand.option('-i, --interactive', 'interactive step-by-step editor');
 
 restartCommand.action(
   withErrorHandling(async (nameOrId: string, options) => {
@@ -90,20 +88,6 @@ restartCommand.action(
         console.log(chalk.yellow(`⚠ ${warning}`));
       }
       changes = built.changes;
-    }
-
-    if (options.dryRun) {
-      console.log(chalk.blue('Restart payload (dry-run):'));
-      console.log('');
-      console.log(`PUT /experiments/${id}/restart`);
-      console.log('');
-      if (changes) {
-        console.log('Changes from template:');
-        console.log(JSON.stringify(changes, null, 2));
-      } else {
-        console.log('No template changes — restart with current config.');
-      }
-      return;
     }
 
     const result = await restartExperiment(client, params, changes);

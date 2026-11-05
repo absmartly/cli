@@ -61,6 +61,42 @@ describe('notifications command', () => {
     expect(mockClient.getNotifications).toHaveBeenCalledWith(100);
   });
 
+  it('should not print truncation warnings when output is json', async () => {
+    vi.mocked(getGlobalOptions).mockReturnValue({ output: 'json' } as any);
+    const all = Array.from({ length: 50 }, (_, i) => ({ id: i }));
+    mockClient.getNotifications.mockResolvedValue(all);
+    await notificationsCommand.parseAsync(['node', 'test', 'list', '--limit', '20']);
+    const output = consoleSpy.mock.calls.flat().join(' ');
+    expect(output).not.toContain('Showing 20 of 50 notifications');
+  });
+
+  it('should print truncation warnings for table output', async () => {
+    const all = Array.from({ length: 50 }, (_, i) => ({ id: i }));
+    mockClient.getNotifications.mockResolvedValue(all);
+    await notificationsCommand.parseAsync(['node', 'test', 'list', '--limit', '20']);
+    const output = consoleSpy.mock.calls.flat().join(' ');
+    expect(output).toContain('Showing 20 of 50 notifications');
+  });
+
+  it('should reject a negative --limit instead of returning an inverted slice', async () => {
+    mockClient.getNotifications.mockResolvedValue([{ id: 1 }]);
+    await expect(
+      notificationsCommand.parseAsync(['node', 'test', 'list', '--limit', '-1'])
+    ).rejects.toThrow('process.exit: 1');
+    const errorOutput = consoleErrorSpy.mock.calls.flat().join(' ');
+    expect(errorOutput).toContain('Invalid value for --limit');
+    expect(mockClient.getNotifications).not.toHaveBeenCalled();
+  });
+
+  it('should reject a non-numeric --limit instead of silently returning nothing', async () => {
+    mockClient.getNotifications.mockResolvedValue([{ id: 1 }]);
+    await expect(
+      notificationsCommand.parseAsync(['node', 'test', 'list', '--limit', 'abc'])
+    ).rejects.toThrow('process.exit: 1');
+    const errorOutput = consoleErrorSpy.mock.calls.flat().join(' ');
+    expect(errorOutput).toContain('Invalid value for --limit');
+  });
+
   it('should mark notifications as seen', async () => {
     mockClient.markNotificationsSeen.mockResolvedValue(undefined);
     await notificationsCommand.parseAsync(['node', 'test', 'mark-seen']);
