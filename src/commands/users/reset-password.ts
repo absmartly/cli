@@ -10,10 +10,14 @@ import { parseUserId } from '../../lib/utils/validators.js';
 import type { UserId } from '../../lib/api/branded-types.js';
 import { resetUserPassword } from '../../core/users/reset-password.js';
 
-export function printPasswordNotice(message: string, password: string): void {
-  console.log(chalk.green(`✓ ${message}`));
-  console.log(`  New password: ${password}`);
-  console.log(chalk.yellow('  Save this password — it cannot be retrieved later.'));
+export function printPasswordNotice(
+  message: string,
+  password: string,
+  write: (line: string) => void = console.log
+): void {
+  write(chalk.green(`✓ ${message}`));
+  write(`  New password: ${password}`);
+  write(chalk.yellow('  Save this password — it cannot be retrieved later.'));
 }
 
 export const resetPasswordCommand = new Command('reset-password')
@@ -29,17 +33,21 @@ export const resetPasswordCommand = new Command('reset-password')
       if (format === 'table' || format === 'rendered') {
         printPasswordNotice(`Password reset for user ${id}`, result.data.password);
       } else if (format === 'ids') {
+        // The password can't be retrieved later, so keep it on stderr.
         console.log(id);
+        printPasswordNotice(`Password reset for user ${id}`, result.data.password, console.error);
       } else {
         // Structured/plain formats: the password is the point of this command,
         // so include it in the payload (not only under --raw).
         printFormatted(
-          {
-            success: true,
-            message: `Password reset for user ${id}`,
-            id,
-            password: result.data.password,
-          },
+          globalOptions.raw
+            ? result.data
+            : {
+                success: true,
+                message: `Password reset for user ${id}`,
+                id,
+                password: result.data.password,
+              },
           globalOptions
         );
       }

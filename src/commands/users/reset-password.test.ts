@@ -71,6 +71,25 @@ describe('reset-password command', () => {
     );
   });
 
+  it('prints the API response under --raw', async () => {
+    vi.mocked(getGlobalOptions).mockReturnValue({
+      output: 'json',
+      outputExplicit: true,
+      raw: true,
+    } as any);
+    mockClient.resetUserPassword.mockResolvedValue({ password: 'new-pass-123' });
+    await resetPasswordCommand.parseAsync(['node', 'test', '42']);
+    expect(printFormatted).toHaveBeenCalledWith({ password: 'new-pass-123' }, expect.anything());
+  });
+
+  it('prints only the id on stdout and the password on stderr with -o ids', async () => {
+    vi.mocked(getGlobalOptions).mockReturnValue({ output: 'ids', outputExplicit: true } as any);
+    mockClient.resetUserPassword.mockResolvedValue({ password: 'new-pass-123' });
+    await resetPasswordCommand.parseAsync(['node', 'test', '42']);
+    expect(consoleSpy.mock.calls).toEqual([[42]]);
+    expect(consoleErrorSpy.mock.calls.flat().join(' ')).toContain('new-pass-123');
+  });
+
   it('should reject invalid user ID', async () => {
     await expect(resetPasswordCommand.parseAsync(['node', 'test', 'abc'])).rejects.toThrow();
     expect(mockClient.resetUserPassword).not.toHaveBeenCalled();
