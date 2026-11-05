@@ -9,8 +9,6 @@ import {
   printResult,
   resolveAPIKey,
   resolveEndpoint,
-  shouldOutputIdsOnly,
-  STRUCTURED_FORMATS,
   withErrorHandling,
   type GlobalOptions,
 } from '../../lib/utils/api-helper.js';
@@ -47,7 +45,7 @@ import {
   formatUserRoles,
   type UserClientFilters,
 } from '../../core/users/filter.js';
-import { resetPasswordCommand, printPasswordNotice } from './reset-password.js';
+import { resetPasswordCommand, printPasswordResult } from './reset-password.js';
 import { userApiKeysCommand } from './api-keys.js';
 
 export const usersCommand = new Command('users').alias('user').description('User commands');
@@ -391,22 +389,13 @@ const createCommand = new Command('create')
           );
         }
 
-        const format = globalOptions.output ?? 'table';
-        if (globalOptions.outputExplicit && STRUCTURED_FORMATS.has(format)) {
-          printFormatted(
-            globalOptions.raw
-              ? { ...result.data, password }
-              : { success: true, message, id, password },
-            globalOptions
-          );
-        } else if (shouldOutputIdsOnly(globalOptions)) {
-          // Keep stdout to the bare id, but never drop the password: it can't
-          // be retrieved later, so it always goes to stderr.
-          console.log(id);
-          printPasswordNotice(`User created with ID: ${id}`, password, console.error);
-        } else {
-          printPasswordNotice(`User created with ID: ${id}`, password);
-        }
+        printPasswordResult(globalOptions, {
+          id,
+          password,
+          notice: `User created with ID: ${id}`,
+          payload: { success: true, message, id, password },
+          rawPayload: { ...result.data, password },
+        });
         return;
       }
 
