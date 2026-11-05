@@ -662,7 +662,7 @@ Custom field values are sent to the API as an object keyed by each field's numer
 
 ```bash
 abs experiments update 123 --field "Hypothesis=Updated hypothesis" --show-request
-# → PUT https://your-instance.absmartly.io/experiments/123
+# → PUT https://your-instance.absmartly.com/v1/experiments/123
 #   Accept: application/json
 #   Content-Type: application/json
 #   Authorization: Api-Key ***
