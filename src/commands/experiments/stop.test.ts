@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Readable } from 'stream';
 import { stopCommand } from './stop.js';
 import { getAPIClientFromOptions, getGlobalOptions } from '../../lib/utils/api-helper.js';
+import { DryRunError } from '../../api-client/http-client.js';
 import { resetCommand } from '../../test/helpers/command-reset.js';
 import { setTTYOverride } from '../../lib/utils/stdin.js';
 
@@ -58,6 +59,26 @@ describe('stop command', () => {
     ]);
 
     expect(mockClient.stopExperiment).toHaveBeenCalledWith(42, 'testing', 'my note');
+  });
+
+  it('treats DryRunError as a preview, not a failure', async () => {
+    const saved = process.exitCode;
+    process.exitCode = undefined;
+    try {
+      mockClient.stopExperiment.mockRejectedValueOnce(
+        new DryRunError('PUT', '/experiments/42/stop')
+      );
+
+      await stopCommand.parseAsync(['node', 'test', '42', '--reason', 'other']);
+
+      const output = consoleErrorSpy.mock.calls.flat().join(' ');
+      expect(output).toContain('Experiment 42');
+      expect(output).toContain('Dry run: PUT /experiments/42/stop');
+      expect(consoleSpy).not.toHaveBeenCalled();
+      expect(process.exitCode).not.toBe(1);
+    } finally {
+      process.exitCode = saved;
+    }
   });
 
   describe('stdin pipe support', () => {

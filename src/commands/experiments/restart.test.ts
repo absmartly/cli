@@ -314,6 +314,52 @@ describe('restart command', () => {
     expect(output).toContain('Experiment 42 restarted');
   });
 
+  it.skipIf(isLiveMode)(
+    'lets the global --dry-run short-circuit at the API client (no local flag)',
+    async () => {
+      vi.mocked(getGlobalOptions).mockReturnValue({ output: 'table', dryRun: true } as any);
+      const dryRunClient = createAPIClient(BASE_URL, TEST_API_KEY, { dryRun: true });
+      vi.mocked(getAPIClientFromOptions).mockResolvedValue(dryRunClient as any);
+      let restartHit = false;
+      server.use(
+        http.get(`${BASE_URL}/experiments/:id`, () =>
+          HttpResponse.json({
+            ok: true,
+            experiment: {
+              id: 42,
+              name: 'test_exp',
+              display_name: 'Test',
+              state: 'stopped',
+              iteration: 1,
+              type: 'test',
+            },
+            errors: [],
+          })
+        ),
+        http.put(`${BASE_URL}/experiments/:id/restart`, () => {
+          restartHit = true;
+          return HttpResponse.json(
+            { ok: false, errors: ['should not be reached'] },
+            { status: 500 }
+          );
+        })
+      );
+
+      await restartCommand.parseAsync(['node', 'test', '42']);
+
+      const output = consoleErrorSpy.mock.calls.flat().join(' ');
+      expect(output).toContain('Dry run');
+      expect(consoleSpy.mock.calls.flat().join(' ')).not.toContain('Dry run');
+      expect(restartHit).toBe(false);
+      expect(processExitSpy).not.toHaveBeenCalled();
+    }
+  );
+
+  it('has no local --dry-run option (superseded by global --dry-run)', () => {
+    const optionNames = restartCommand.options.map((o) => o.long);
+    expect(optionNames).not.toContain('--dry-run');
+  });
+
   it('should pass custom --reason', async () => {
     await restartCommand.parseAsync(['node', 'test', '42', '--reason', 'other']);
 

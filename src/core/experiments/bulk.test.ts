@@ -7,7 +7,7 @@ import {
   bulkStop,
   bulkArchive,
 } from './bulk.js';
-import { APIError } from '../../api-client/http-client.js';
+import { APIError, DryRunError } from '../../api-client/http-client.js';
 import type { ExperimentId } from '../../lib/api/branded-types.js';
 
 vi.mock('../../lib/utils/validators.js', () => ({
@@ -259,6 +259,23 @@ describe('bulk', () => {
       expect(result.data.succeeded).toBe(1);
       expect(result.data.failed).toBe(1);
       expect(result.data.total).toBe(2);
+      expect(result.warnings).toBeUndefined();
+    });
+
+    it('treats DryRunError as a successful preview, not a failure, and does not abort the batch', async () => {
+      const ids = [1, 2].map((n) => id(n));
+      const names = new Map(ids.map((i) => [i, `exp-${i}`]));
+      let calls = 0;
+      const action = vi.fn().mockImplementation(() => {
+        calls++;
+        return Promise.reject(new DryRunError('PUT', `/experiments/${calls}/stop`));
+      });
+
+      const result = await runBulkOperation(ids, names, action);
+
+      expect(result.data.succeeded).toBe(2);
+      expect(result.data.failed).toBe(0);
+      expect(result.data.results.every((r) => r.success && r.dryRun)).toBe(true);
       expect(result.warnings).toBeUndefined();
     });
   });
