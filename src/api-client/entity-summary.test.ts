@@ -16,6 +16,7 @@ import {
   summarizeNamedEntityRow,
   summarizeWebhookRow,
   summarizeWebhook,
+  groupRolePermissions,
 } from './entity-summary.js';
 
 describe('applyShowExclude', () => {
@@ -458,5 +459,38 @@ describe('summarizeWebhookRow', () => {
       updated_at: '',
       updated_by: '',
     });
+  });
+});
+
+describe('groupRolePermissions', () => {
+  it('groups permission names by category name', () => {
+    const role = {
+      id: 1,
+      permissions: [
+        { permission: { name: 'a', category_id: 1 } },
+        { permission: { name: 'b', category_id: 1 } },
+        { permission: { name: 'c', category_id: 9 } },
+      ],
+    };
+    expect(groupRolePermissions(role, [{ id: 1, name: 'Experiments' }]).permissions).toEqual({
+      Experiments: 'a, b',
+      'category 9': 'c',
+    });
+  });
+
+  it('handles category names that collide with Object.prototype keys', () => {
+    const role = {
+      permissions: [
+        { permission: { name: 'x', category_id: 1 } },
+        { permission: { name: 'y', category_id: 2 } },
+      ],
+    };
+    const cats = [
+      { id: 1, name: 'constructor' },
+      { id: 2, name: '__proto__' },
+    ];
+    const grouped = groupRolePermissions(role, cats).permissions as Record<string, string>;
+    expect(grouped.constructor).toBe('x');
+    expect(Object.getOwnPropertyDescriptor(grouped, '__proto__')?.value).toBe('y');
   });
 });

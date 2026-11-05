@@ -330,7 +330,8 @@ export function groupRolePermissions(
 ): Record<string, unknown> {
   if (!Array.isArray(role.permissions)) return role;
   const names = new Map(categories.map((c) => [Number(c.id), c.name]));
-  const grouped: Record<string, string[]> = {};
+  // Null prototype so a category named e.g. "constructor" can't hit an inherited key.
+  const grouped: Record<string, string[]> = Object.create(null);
   for (const entry of role.permissions as Array<Record<string, unknown>>) {
     const perm = (entry.permission ?? entry) as Record<string, unknown>;
     const cat = names.get(Number(perm.category_id)) ?? `category ${perm.category_id}`;
