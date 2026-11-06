@@ -31,7 +31,7 @@ Releases are automated by `.github/workflows/release-please.yml` (the "Publish" 
 
 So **a release happens only when a merged commit changes `package.json` to a version not yet on npm.** The convention is **one minor bump per release** (`npm version minor --no-git-tag-version`, committed as `chore(release): bump cli to X.Y.Z`).
 
-`main` is protected by a **required merge queue** with auto-merge disabled. `gh pr merge` fails ("Auto merge is not allowed"); add a green PR to the queue via GraphQL instead:
+`main` is protected by a **required merge queue**, and repo-level auto-merge is enabled. Queue a PR with `gh pr merge --auto --squash <n>`; it enters the queue once its checks are green. If that ever fails, enqueue directly via GraphQL:
 
 ```bash
 PRID=$(gh pr view <n> --json id --jq .id)
