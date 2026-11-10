@@ -3,12 +3,51 @@ import chalk from 'chalk';
 import {
   getAPIClientFromOptions,
   getGlobalOptions,
-  printResult,
+  printFormatted,
+  shouldOutputIdsOnly,
+  STRUCTURED_FORMATS,
   withErrorHandling,
+  type GlobalOptions,
 } from '../../lib/utils/api-helper.js';
 import { parseUserId } from '../../lib/utils/validators.js';
 import type { UserId } from '../../lib/api/branded-types.js';
 import { resetUserPassword } from '../../core/users/reset-password.js';
+
+export function printPasswordNotice(
+  message: string,
+  password: string,
+  write: (line: string) => void = console.log
+): void {
+  write(chalk.green(`✓ ${message}`));
+  write(`  New password: ${password}`);
+  write(chalk.yellow('  Save this password — it cannot be retrieved later.'));
+}
+
+/** Output shared by `users reset-password` and `users create --with-password`. */
+export function printPasswordResult(
+  globalOptions: GlobalOptions,
+  result: {
+    id: UserId;
+    password: string;
+    notice: string;
+    payload: Record<string, unknown>;
+    rawPayload: unknown;
+  }
+): void {
+  const format = globalOptions.output ?? 'table';
+  if (globalOptions.outputExplicit && STRUCTURED_FORMATS.has(format)) {
+    // The password is the point of these commands, so include it in the
+    // payload (not only under --raw).
+    printFormatted(globalOptions.raw ? result.rawPayload : result.payload, globalOptions);
+  } else if (shouldOutputIdsOnly(globalOptions)) {
+    // Keep stdout to the bare id (-o ids or piped stdout), but never drop
+    // the password: it can't be retrieved later, so it goes to stderr.
+    console.log(result.id);
+    printPasswordNotice(result.notice, result.password, console.error);
+  } else {
+    printPasswordNotice(result.notice, result.password);
+  }
+}
 
 export const resetPasswordCommand = new Command('reset-password')
   .description('Reset a user password')
@@ -19,17 +58,13 @@ export const resetPasswordCommand = new Command('reset-password')
       const client = await getAPIClientFromOptions(globalOptions);
 
       const result = await resetUserPassword(client, { id });
-      const format = globalOptions.output ?? 'table';
-      if (format === 'table' || format === 'rendered') {
-        console.log(chalk.green(`✓ Password reset for user ${id}`));
-        console.log(`  New password: ${result.data.password}`);
-        console.log(chalk.yellow('  Save this password — it cannot be retrieved later.'));
-      } else {
-        printResult(globalOptions, {
-          message: `✓ Password reset for user ${id}`,
-          id,
-          raw: result.data,
-        });
-      }
+      const message = `Password reset for user ${id}`;
+      printPasswordResult(globalOptions, {
+        id,
+        password: result.data.password,
+        notice: message,
+        payload: { success: true, message, id, password: result.data.password },
+        rawPayload: result.data,
+      });
     })
   );

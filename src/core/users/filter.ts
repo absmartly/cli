@@ -170,7 +170,9 @@ export async function resolveRoleIds(client: APIClient, values: string[]): Promi
       search: value,
       items: USER_FILTER_SCAN_PAGE_SIZE,
     })) as Array<Record<string, unknown>>;
-    const exact = roles.filter((r) => String(r.name ?? '').toLowerCase() === value.toLowerCase());
+    const ci = roles.filter((r) => String(r.name ?? '').toLowerCase() === value.toLowerCase());
+    const sameCase = ci.filter((r) => String(r.name ?? '') === value);
+    const exact = ci.length > 1 && sameCase.length === 1 ? sameCase : ci;
     if (exact.length === 0) {
       // Suggestions are best-effort: a failed lookup must not mask the real error.
       const available = (await client

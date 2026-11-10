@@ -26,6 +26,7 @@ describe('roles command', () => {
   const mockClient = {
     listRoles: vi.fn().mockResolvedValue([{ id: 1, name: 'admin' }]),
     getRole: vi.fn().mockResolvedValue({ id: 1, name: 'admin' }),
+    listPermissionCategories: vi.fn().mockResolvedValue([{ id: 9, name: 'Experiments' }]),
     createRole: vi.fn().mockResolvedValue({ id: 99 }),
     updateRole: vi.fn().mockResolvedValue({}),
     deleteRole: vi.fn().mockResolvedValue({}),
@@ -65,6 +66,21 @@ describe('roles command', () => {
     expect(mockClient.getRole).toHaveBeenCalledWith(1);
     expect(printFormatted).toHaveBeenCalledWith(
       expect.objectContaining({ id: 1 }),
+      expect.anything()
+    );
+  });
+
+  it('shows role permissions grouped by category name', async () => {
+    mockClient.getRole.mockResolvedValueOnce({
+      id: 1,
+      permissions: [
+        { permission: { name: 'Get', category_id: 9 } },
+        { permission: { name: 'List', category_id: 9 } },
+      ],
+    });
+    await rolesCommand.parseAsync(['node', 'test', 'get', '1']);
+    expect(printFormatted).toHaveBeenCalledWith(
+      expect.objectContaining({ permissions: { Experiments: 'Get, List' } }),
       expect.anything()
     );
   });
