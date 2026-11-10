@@ -317,6 +317,62 @@ name: treatment
       expect(result.variants![1].name).toBe('treatment');
     });
 
+    it('accepts variant headings indented by one to three spaces', () => {
+      for (const indent of [' ', '  ', '   ']) {
+        const result = parseExperimentMarkdown(
+          variantsDoc(`${indent}### variant_0
+
+name: control
+config: {
+  "a": 1
+}
+
+${indent}### variant_1
+
+name: treatment
+config: {"b":2}
+`)
+        );
+        expect(result.variants).toHaveLength(2);
+        expect(result.variants![0]).toMatchObject({ variant: 0, name: 'control' });
+        expect(JSON.parse(result.variants![0].config!)).toEqual({ a: 1 });
+        expect(result.variants![1]).toMatchObject({
+          variant: 1,
+          name: 'treatment',
+          config: '{"b":2}',
+        });
+      }
+    });
+
+    it('keeps variants separate when only some headings are indented', () => {
+      const result = parseExperimentMarkdown(
+        variantsDoc(`### variant_0
+
+name: control
+config: {"a":1}
+
+  ### variant_1
+
+name: treatment
+config:
+\`\`\`json
+{"b": 2}
+\`\`\`
+`)
+      );
+      expect(result.variants).toHaveLength(2);
+      expect(result.variants![0]).toMatchObject({
+        variant: 0,
+        name: 'control',
+        config: '{"a":1}',
+      });
+      expect(result.variants![1]).toMatchObject({
+        variant: 1,
+        name: 'treatment',
+        config: '{"b": 2}',
+      });
+    });
+
     it('parses fenced, bare and single-line config with CRLF line endings', () => {
       const doc = variantsDoc(`### variant_0
 

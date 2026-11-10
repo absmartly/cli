@@ -245,6 +245,12 @@ function parseVariants(content: string): VariantTemplate[] {
   return variants;
 }
 
+function countLeadingSpaces(line: string): number {
+  let n = 0;
+  while (n < line.length && line.charAt(n) === ' ') n++;
+  return n;
+}
+
 /**
  * Splits the Variants section into `### variant_N` bodies, as lines with any
  * trailing `\r` removed. A body ends at the next line that starts with `###`,
@@ -260,11 +266,14 @@ function splitVariantSections(content: string): Array<{ variantNum: number; line
   };
 
   for (const rawLine of content.split('\n')) {
-    const line = rawLine.endsWith('\r') ? rawLine.slice(0, -1) : rawLine;
-    if (!line.startsWith('###')) {
+    let line = rawLine.endsWith('\r') ? rawLine.slice(0, -1) : rawLine;
+    // Markdown allows up to three spaces of indentation before a heading.
+    const indent = countLeadingSpaces(line);
+    if (indent > 3 || !line.startsWith('###', indent)) {
       current?.lines.push(line);
       continue;
     }
+    line = line.slice(indent);
     flush();
     if (!line.startsWith(HEADING)) continue;
     let end = HEADING.length;
