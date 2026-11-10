@@ -92,6 +92,436 @@ config: {"a":2}
     expect(result.variants![1].variant).toBe(1);
   });
 
+  describe('multi-line variant config', () => {
+    const variantsDoc = (body: string) => `---
+name: exp1
+---
+
+## Variants
+
+${body}`;
+
+    it('reads a fenced json block after an empty config key', () => {
+      const result = parseExperimentMarkdown(
+        variantsDoc(`### variant_0
+
+name: control
+config:
+\`\`\`json
+{
+  "button_size": 12,
+  "show_badge": false
+}
+\`\`\`
+
+### variant_1
+
+name: treatment
+config: {"button_size":16}
+`)
+      );
+      expect(JSON.parse(result.variants![0].config!)).toEqual({
+        button_size: 12,
+        show_badge: false,
+      });
+      expect(result.variants![0].name).toBe('control');
+      expect(result.variants![1].config).toBe('{"button_size":16}');
+    });
+
+    it('accepts a plain fence and blank lines before it', () => {
+      const result = parseExperimentMarkdown(
+        variantsDoc(`### variant_0
+
+config:
+
+\`\`\`
+{"a": 1}
+\`\`\`
+name: control
+`)
+      );
+      expect(result.variants![0].config).toBe('{"a": 1}');
+      expect(result.variants![0].name).toBe('control');
+    });
+
+    it('does not treat key-like lines inside the fence as variant keys', () => {
+      const result = parseExperimentMarkdown(
+        variantsDoc(`### variant_0
+
+name: control
+config:
+\`\`\`json
+name: x
+screenshot: y
+\`\`\`
+`)
+      );
+      expect(result.variants![0].name).toBe('control');
+      expect(result.variants![0].screenshot).toBeUndefined();
+      expect(result.variants![0].config).toBe('name: x\nscreenshot: y');
+    });
+
+    it('throws on an unterminated fence', () => {
+      expect(() =>
+        parseExperimentMarkdown(
+          variantsDoc(`### variant_0
+
+name: control
+config:
+\`\`\`json
+{"a": 1}
+`)
+        )
+      ).toThrow(/variant_0.*not closed/);
+    });
+
+    it.each([
+      ['a bare object', '{\n  "a": 1\n}'],
+      ['a bare array', '[\n  1\n]'],
+      ['a tilde fence', '~~~json\n{"a": 1}\n~~~'],
+      ['a two-backtick fence', '``json\n{"a": 1}\n``'],
+      ['a fence whose info string has a backtick', '```js`on\n{"a": 1}\n```'],
+    ])('throws when an empty config key is followed by %s', (_label, block) => {
+      expect(() =>
+        parseExperimentMarkdown(
+          variantsDoc(`### variant_0
+
+name: control
+config:
+${block}
+`)
+        )
+      ).toThrow(/variant_0: config must start on the config: line/);
+    });
+
+    it('treats an empty fenced config like an empty config key (default)', () => {
+      const result = parseExperimentMarkdown(
+        variantsDoc(`### variant_0
+
+name: control
+config:
+\`\`\`json
+
+\`\`\`
+`)
+      );
+      expect(result.variants![0].config).toBe('');
+      expect(result.variants![0].name).toBe('control');
+    });
+
+    it('reads a bare object spanning several lines', () => {
+      const result = parseExperimentMarkdown(
+        variantsDoc(`### variant_0
+
+name: control
+config: {
+  "label": "a } tricky { \\"string\\"",
+  "layout": { "columns": [1, 2] }
+}
+screenshot: ./shot.png
+`)
+      );
+      expect(JSON.parse(result.variants![0].config!)).toEqual({
+        label: 'a } tricky { "string"',
+        layout: { columns: [1, 2] },
+      });
+      expect(result.variants![0].screenshot).toBe('./shot.png');
+    });
+
+    it('reads a bare array spanning several lines', () => {
+      const result = parseExperimentMarkdown(
+        variantsDoc(`### variant_0
+
+config: [
+  1,
+  2
+]
+`)
+      );
+      expect(JSON.parse(result.variants![0].config!)).toEqual([1, 2]);
+    });
+
+    it('throws a clear error on a bare config that never closes, without swallowing later variants', () => {
+      expect(() =>
+        parseExperimentMarkdown(
+          variantsDoc(`### variant_0
+
+config: {
+  "a": 1
+name: control
+
+### variant_1
+
+config: {"b":2}
+`)
+        )
+      ).toThrow(/Invalid JSON in template variant_0 config: the \{ .* never closed/);
+    });
+
+    it('does not let an unclosed quote hide the closing brace on a later line', () => {
+      const result = parseExperimentMarkdown(
+        variantsDoc(`### variant_0
+
+config: {
+  "a": "oops,
+  "b": 2
+}
+name: control
+`)
+      );
+      expect(result.variants![0].config).toBe('{\n  "a": "oops,\n  "b": 2\n}');
+      expect(result.variants![0].name).toBe('control');
+    });
+
+    it('ignores braces, brackets and backticks inside JSON strings of a bare config', () => {
+      const result = parseExperimentMarkdown(
+        variantsDoc(`### variant_0
+
+config: {
+  "md": "\`\`\`json {[ not a fence",
+  "esc": "a \\\\\\" } ]"
+}
+name: control
+`)
+      );
+      expect(JSON.parse(result.variants![0].config!)).toEqual({
+        md: '\`\`\`json {[ not a fence',
+        esc: 'a \\" } ]',
+      });
+      expect(result.variants![0].name).toBe('control');
+    });
+
+    it('keeps backtick runs inside a fenced config and closes only on a fence line', () => {
+      const result = parseExperimentMarkdown(
+        variantsDoc(`### variant_0
+
+config:
+\`\`\`json
+{
+  "snippet": "\`\`\`",
+  "inline": "\`code\`"
+}
+\`\`\`
+name: control
+`)
+      );
+      expect(JSON.parse(result.variants![0].config!)).toEqual({
+        snippet: '\`\`\`',
+        inline: '\`code\`',
+      });
+      expect(result.variants![0].name).toBe('control');
+    });
+
+    it('closes a longer opening fence only with a fence at least as long', () => {
+      const result = parseExperimentMarkdown(
+        variantsDoc(`### variant_0
+
+config:
+\`\`\`\`json
+{"a": 1}
+\`\`\`
+\`\`\`\`
+name: control
+`)
+      );
+      expect(result.variants![0].config).toBe('{"a": 1}\n\`\`\`');
+      expect(result.variants![0].name).toBe('control');
+    });
+
+    it('does not end a variant at ### inside a config value', () => {
+      const result = parseExperimentMarkdown(
+        variantsDoc(`### variant_0
+
+config: {
+  "color": "###fff"
+}
+name: control
+
+### variant_1
+
+config: {"heading": "### title"}
+name: treatment
+`)
+      );
+      expect(result.variants).toHaveLength(2);
+      expect(JSON.parse(result.variants![0].config!)).toEqual({ color: '###fff' });
+      expect(result.variants![0].name).toBe('control');
+      expect(JSON.parse(result.variants![1].config!)).toEqual({ heading: '### title' });
+      expect(result.variants![1].name).toBe('treatment');
+    });
+
+    it('accepts variant headings indented by one to three spaces', () => {
+      for (const indent of [' ', '  ', '   ']) {
+        const result = parseExperimentMarkdown(
+          variantsDoc(`${indent}### variant_0
+
+name: control
+config: {
+  "a": 1
+}
+
+${indent}### variant_1
+
+name: treatment
+config: {"b":2}
+`)
+        );
+        expect(result.variants).toHaveLength(2);
+        expect(result.variants![0]).toMatchObject({ variant: 0, name: 'control' });
+        expect(JSON.parse(result.variants![0].config!)).toEqual({ a: 1 });
+        expect(result.variants![1]).toMatchObject({
+          variant: 1,
+          name: 'treatment',
+          config: '{"b":2}',
+        });
+      }
+    });
+
+    it('keeps variants separate when only some headings are indented', () => {
+      const result = parseExperimentMarkdown(
+        variantsDoc(`### variant_0
+
+name: control
+config: {"a":1}
+
+  ### variant_1
+
+name: treatment
+config:
+\`\`\`json
+{"b": 2}
+\`\`\`
+`)
+      );
+      expect(result.variants).toHaveLength(2);
+      expect(result.variants![0]).toMatchObject({
+        variant: 0,
+        name: 'control',
+        config: '{"a":1}',
+      });
+      expect(result.variants![1]).toMatchObject({
+        variant: 1,
+        name: 'treatment',
+        config: '{"b": 2}',
+      });
+    });
+
+    it('parses fenced, bare and single-line config with CRLF line endings', () => {
+      const doc = variantsDoc(`### variant_0
+
+config:
+\`\`\`json
+{
+  "a": 1
+}
+\`\`\`
+name: control
+screenshot_id: 7
+
+### variant_1
+
+config: {
+  "b": [1, 2]
+}
+name: treatment
+
+### variant_2
+
+config: {"c":3}
+name: other
+`).replace(/\n/g, '\r\n');
+      const result = parseExperimentMarkdown(doc);
+      expect(result.name).toBe('exp1');
+      expect(result.variants).toHaveLength(3);
+      expect(JSON.parse(result.variants![0].config!)).toEqual({ a: 1 });
+      expect(result.variants![0].config).not.toContain('\r');
+      expect(result.variants![0].name).toBe('control');
+      expect(result.variants![0].screenshot_id).toBe(7);
+      expect(JSON.parse(result.variants![1].config!)).toEqual({ b: [1, 2] });
+      expect(result.variants![1].config).not.toContain('\r');
+      expect(result.variants![1].name).toBe('treatment');
+      expect(result.variants![2].config).toBe('{"c":3}');
+      expect(result.variants![2].name).toBe('other');
+    });
+
+    it('parses other variant keys and later sections after a multi-line config', () => {
+      const result = parseExperimentMarkdown(`---
+name: exp1
+---
+
+## Variants
+
+### variant_0
+
+config:
+\`\`\`json
+{"a": 1}
+\`\`\`
+name: control
+screenshot_id: 3
+![Control](./control.png)
+
+### variant_1
+
+config: {
+  "b": 2
+}
+name: treatment
+screenshot: ./t.png
+
+## Audience
+
+\`\`\`json
+{"filter": []}
+\`\`\`
+
+## Metrics
+
+primary_metric: conversions
+`);
+      expect(result.variants![0]).toEqual({
+        variant: 0,
+        name: 'control',
+        config: '{"a": 1}',
+        screenshot_id: 3,
+        screenshot: './control.png',
+        screenshot_label: 'Control',
+      });
+      expect(result.variants![1]).toEqual({
+        variant: 1,
+        name: 'treatment',
+        config: '{\n  "b": 2\n}',
+        screenshot: './t.png',
+      });
+      expect(result.audience).toBe('{"filter": []}');
+      expect(result.primary_metric).toBe('conversions');
+    });
+
+    it('leaves invalid single-line config to the payload builder', () => {
+      const result = parseExperimentMarkdown(
+        variantsDoc(`### variant_0
+
+config: {"a":1} trailing
+name: control
+`)
+      );
+      expect(result.variants![0].config).toBe('{"a":1} trailing');
+      expect(result.variants![0].name).toBe('control');
+    });
+
+    it('leaves single-line config unchanged', () => {
+      const result = parseExperimentMarkdown(
+        variantsDoc(`### variant_0
+
+config: {"a":1}
+name: control
+`)
+      );
+      expect(result.variants![0].config).toBe('{"a":1}');
+      expect(result.variants![0].name).toBe('control');
+    });
+  });
+
   it('should parse custom fields section', () => {
     const md = `---
 name: exp1

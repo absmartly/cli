@@ -192,24 +192,25 @@ function parseInlineList(content: string, startOffset: number): string[] {
 
 function parseVariants(content: string): VariantTemplate[] {
   const variants: VariantTemplate[] = [];
-  const variantPattern = /### variant_(\d+)\s*\n([\s\S]*?)(?=###|$)/g;
-  let match;
 
-  while ((match = variantPattern.exec(content)) !== null) {
-    const variantNumStr = match[1];
-    const variantContent = match[2];
-    if (!variantNumStr || !variantContent) {
-      continue;
-    }
-
-    const variantNum = parseInt(variantNumStr, 10);
+  for (const { variantNum, lines } of splitVariantSections(content)) {
     const variant: VariantTemplate = {
       variant: variantNum,
       name: `variant_${variantNum}`,
     };
 
-    const lines = variantContent.split('\n');
-    for (const line of lines) {
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i]!;
+      const keyValueMatch = matchVariantKeyValue(line);
+      if (keyValueMatch && keyValueMatch[0].toLowerCase() === 'config') {
+        const block = readConfigBlock(lines, i, keyValueMatch[1].trim(), variantNum);
+        if (block) {
+          variant.config = block.config;
+          i = block.lastLine;
+          continue;
+        }
+      }
+
       const imageMatch = /^!\[([^\]]*)\]\((.+)\)$/.exec(line.trim());
       if (imageMatch) {
         const alt = imageMatch[1] ?? '';
@@ -221,7 +222,6 @@ function parseVariants(content: string): VariantTemplate[] {
         continue;
       }
 
-      const keyValueMatch = matchVariantKeyValue(line);
       if (keyValueMatch) {
         const [matchedKey, matchedValue] = keyValueMatch;
         if (matchedValue) {
@@ -242,6 +242,132 @@ function parseVariants(content: string): VariantTemplate[] {
   }
 
   return variants;
+}
+
+function countLeadingSpaces(line: string): number {
+  let n = 0;
+  while (n < line.length && line.charAt(n) === ' ') n++;
+  return n;
+}
+
+function splitVariantSections(content: string): Array<{ variantNum: number; lines: string[] }> {
+  const HEADING = '### variant_';
+  const sections: Array<{ variantNum: number; lines: string[] }> = [];
+  let current: { variantNum: number; lines: string[] } | undefined;
+  const flush = () => {
+    if (current && current.lines.some((l) => l.trim() !== '')) sections.push(current);
+    current = undefined;
+  };
+
+  for (const rawLine of content.split('\n')) {
+    let line = rawLine.endsWith('\r') ? rawLine.slice(0, -1) : rawLine;
+    // Markdown allows up to three spaces of indentation before a heading.
+    const indent = countLeadingSpaces(line);
+    if (indent > 3 || !line.startsWith('###', indent)) {
+      current?.lines.push(line);
+      continue;
+    }
+    line = line.slice(indent);
+    flush();
+    if (!line.startsWith(HEADING)) continue;
+    let end = HEADING.length;
+    while (end < line.length && line.charAt(end) >= '0' && line.charAt(end) <= '9') end++;
+    if (end > HEADING.length && line.slice(end).trim() === '') {
+      current = { variantNum: parseInt(line.slice(HEADING.length, end), 10), lines: [] };
+    }
+  }
+  flush();
+  return sections;
+}
+
+function readConfigBlock(
+  lines: string[],
+  keyLine: number,
+  value: string,
+  variantNum: number
+): { config: string; lastLine: number } | undefined {
+  if (value === '') {
+    let fenceLine = keyLine + 1;
+    while (fenceLine < lines.length && lines[fenceLine]!.trim() === '') fenceLine++;
+    if (fenceLine >= lines.length) return undefined;
+    const opening = lines[fenceLine]!.trim();
+    const fenceLength = countBackticks(opening, 0);
+    // A backtick fence is at least three backticks, and its info string
+    // (`json`) may not contain backticks.
+    const isFence = fenceLength >= 3 && !opening.includes('`', fenceLength);
+    if (!isFence && /^[{[`]|^~~~/.test(opening)) {
+      // Otherwise this intended config would be dropped and the variant sent with {}.
+      throw new Error(
+        `Template variant_${variantNum}: config must start on the config: line or ` +
+          'in a ```json code fence (tilde fences are not supported)'
+      );
+    }
+    if (!isFence) return undefined;
+    for (let end = fenceLine + 1; end < lines.length; end++) {
+      const closing = lines[end]!.trim();
+      if (closing.length >= fenceLength && countBackticks(closing, 0) === closing.length) {
+        return {
+          config: lines
+            .slice(fenceLine + 1, end)
+            .join('\n')
+            .trim(),
+          lastLine: end,
+        };
+      }
+    }
+    throw new Error(`Template variant_${variantNum}: config code fence is not closed`);
+  }
+
+  if (value[0] !== '{' && value[0] !== '[') return undefined;
+  const closing = findJsonValueEnd(value, lines, keyLine + 1);
+  if (closing === keyLine) return undefined;
+  if (closing === -1) {
+    // Reading on to the end of the variant would swallow its other keys and
+    // report the JSON error against the wrong name, so fail here instead.
+    throw new Error(
+      `Invalid JSON in template variant_${variantNum} config: the ${value[0]} that ` +
+        `opens on the config: line is never closed`
+    );
+  }
+  return {
+    config: [value, ...lines.slice(keyLine + 1, closing + 1)].join('\n').trim(),
+    lastLine: closing,
+  };
+}
+
+function findJsonValueEnd(first: string, lines: string[], from: number): number {
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let n = from - 1; n < lines.length; n++) {
+    const line = n === from - 1 ? first : lines[n]!;
+    // JSON strings cannot span lines, so an unclosed quote is a syntax error
+    // on its own line rather than a reason to swallow the lines after it.
+    inString = false;
+    escaped = false;
+    for (let c = 0; c < line.length; c++) {
+      const ch = line.charAt(c);
+      if (inString) {
+        if (escaped) escaped = false;
+        else if (ch === '\\') escaped = true;
+        else if (ch === '"') inString = false;
+      } else if (ch === '"') {
+        inString = true;
+      } else if (ch === '{' || ch === '[') {
+        depth++;
+      } else if (ch === '}' || ch === ']') {
+        depth--;
+        if (depth === 0) return n;
+      }
+    }
+  }
+  return -1;
+}
+
+function countBackticks(text: string, from: number): number {
+  let i = from;
+  while (i < text.length && text.charAt(i) === '`') i++;
+  return i - from;
 }
 
 function parseCustomFields(content: string): Record<string, string> {
