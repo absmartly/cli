@@ -291,6 +291,13 @@ function readConfigBlock(
     while (fenceLine < lines.length && lines[fenceLine]!.trim() === '') fenceLine++;
     if (fenceLine >= lines.length) return undefined;
     const opening = lines[fenceLine]!.trim();
+    if (opening[0] === '{' || opening[0] === '[' || opening.startsWith('~~~')) {
+      // Otherwise this intended config would be dropped and the variant sent with {}.
+      throw new Error(
+        `Template variant_${variantNum}: config must start on the config: line or ` +
+          'in a ```json code fence (tilde fences are not supported)'
+      );
+    }
     const fenceLength = countBackticks(opening, 0);
     // A backtick fence is at least three backticks, and its info string
     // (`json`) may not contain backticks.

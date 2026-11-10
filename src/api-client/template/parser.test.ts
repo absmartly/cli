@@ -176,6 +176,38 @@ config:
       ).toThrow(/variant_0.*not closed/);
     });
 
+    it.each([
+      ['a bare object', '{\n  "a": 1\n}'],
+      ['a bare array', '[\n  1\n]'],
+      ['a tilde fence', '~~~json\n{"a": 1}\n~~~'],
+    ])('throws when an empty config key is followed by %s', (_label, block) => {
+      expect(() =>
+        parseExperimentMarkdown(
+          variantsDoc(`### variant_0
+
+name: control
+config:
+${block}
+`)
+        )
+      ).toThrow(/variant_0: config must start on the config: line/);
+    });
+
+    it('treats an empty fenced config like an empty config key (default)', () => {
+      const result = parseExperimentMarkdown(
+        variantsDoc(`### variant_0
+
+name: control
+config:
+\`\`\`json
+
+\`\`\`
+`)
+      );
+      expect(result.variants![0].config).toBe('');
+      expect(result.variants![0].name).toBe('control');
+    });
+
     it('reads a bare object spanning several lines', () => {
       const result = parseExperimentMarkdown(
         variantsDoc(`### variant_0
