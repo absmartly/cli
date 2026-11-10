@@ -180,6 +180,8 @@ config:
       ['a bare object', '{\n  "a": 1\n}'],
       ['a bare array', '[\n  1\n]'],
       ['a tilde fence', '~~~json\n{"a": 1}\n~~~'],
+      ['a two-backtick fence', '``json\n{"a": 1}\n``'],
+      ['a fence whose info string has a backtick', '```js`on\n{"a": 1}\n```'],
     ])('throws when an empty config key is followed by %s', (_label, block) => {
       expect(() =>
         parseExperimentMarkdown(
