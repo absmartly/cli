@@ -201,9 +201,9 @@ function parseVariants(content: string): VariantTemplate[] {
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i]!;
-      const configKey = matchVariantKeyValue(line);
-      if (configKey && configKey[0].toLowerCase() === 'config') {
-        const block = readConfigBlock(lines, i, configKey[1].trim(), variantNum);
+      const keyValueMatch = matchVariantKeyValue(line);
+      if (keyValueMatch && keyValueMatch[0].toLowerCase() === 'config') {
+        const block = readConfigBlock(lines, i, keyValueMatch[1].trim(), variantNum);
         if (block) {
           variant.config = block.config;
           i = block.lastLine;
@@ -222,7 +222,6 @@ function parseVariants(content: string): VariantTemplate[] {
         continue;
       }
 
-      const keyValueMatch = matchVariantKeyValue(line);
       if (keyValueMatch) {
         const [matchedKey, matchedValue] = keyValueMatch;
         if (matchedValue) {
@@ -251,11 +250,6 @@ function countLeadingSpaces(line: string): number {
   return n;
 }
 
-/**
- * Splits the Variants section into `### variant_N` bodies, as lines with any
- * trailing `\r` removed. A body ends at the next line that starts with `###`,
- * so `###` inside a config value does not cut the variant short.
- */
 function splitVariantSections(content: string): Array<{ variantNum: number; lines: string[] }> {
   const HEADING = '### variant_';
   const sections: Array<{ variantNum: number; lines: string[] }> = [];
@@ -286,13 +280,6 @@ function splitVariantSections(content: string): Array<{ variantNum: number; line
   return sections;
 }
 
-/**
- * Reads a variant `config:` value that spans more than one line, either as a
- * fenced code block on the lines after an empty `config:`, or as a bare JSON
- * object/array that opens on the `config:` line and closes on a later one.
- * Returns undefined when the value is a normal single-line config (or absent),
- * so the caller falls back to single-line handling.
- */
 function readConfigBlock(
   lines: string[],
   keyLine: number,
@@ -340,11 +327,6 @@ function readConfigBlock(
   };
 }
 
-/**
- * Index of the line on which the JSON object/array starting at the beginning
- * of `first` (the rest of line `from - 1`) closes, scanning on through
- * `lines[from..]`, or -1 if it never does. Brackets inside strings are ignored.
- */
 function findJsonValueEnd(first: string, lines: string[], from: number): number {
   let depth = 0;
   let inString = false;
