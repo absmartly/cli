@@ -151,15 +151,14 @@ name: control
 name: control
 config:
 \`\`\`json
-{
-"name": "x",
-"screenshot": "y"
-}
+name: x
+screenshot: y
 \`\`\`
 `)
       );
       expect(result.variants![0].name).toBe('control');
       expect(result.variants![0].screenshot).toBeUndefined();
+      expect(result.variants![0].config).toBe('name: x\nscreenshot: y');
     });
 
     it('throws on an unterminated fence', () => {
