@@ -244,7 +244,7 @@ export function printFormatted(data: unknown, globalOptions: GlobalOptions): voi
 // human-readable green checkmark. `table` and `rendered` keep the
 // interactive success message; everything machine-oriented (json, yaml,
 // markdown, plain, vertical, template) goes through printFormatted.
-const STRUCTURED_FORMATS: ReadonlySet<OutputFormat> = new Set([
+export const STRUCTURED_FORMATS: ReadonlySet<OutputFormat> = new Set([
   'json',
   'yaml',
   'markdown',
