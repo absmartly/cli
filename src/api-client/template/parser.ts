@@ -192,23 +192,13 @@ function parseInlineList(content: string, startOffset: number): string[] {
 
 function parseVariants(content: string): VariantTemplate[] {
   const variants: VariantTemplate[] = [];
-  const variantPattern = /### variant_(\d+)\s*\n([\s\S]*?)(?=###|$)/g;
-  let match;
 
-  while ((match = variantPattern.exec(content)) !== null) {
-    const variantNumStr = match[1];
-    const variantContent = match[2];
-    if (!variantNumStr || !variantContent) {
-      continue;
-    }
-
-    const variantNum = parseInt(variantNumStr, 10);
+  for (const { variantNum, lines } of splitVariantSections(content)) {
     const variant: VariantTemplate = {
       variant: variantNum,
       name: `variant_${variantNum}`,
     };
 
-    const lines = variantContent.split('\n');
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i]!;
       const configKey = matchVariantKeyValue(line);
@@ -256,6 +246,38 @@ function parseVariants(content: string): VariantTemplate[] {
 }
 
 /**
+ * Splits the Variants section into `### variant_N` bodies, as lines with any
+ * trailing `\r` removed. A body ends at the next line that starts with `###`,
+ * so `###` inside a config value does not cut the variant short.
+ */
+function splitVariantSections(content: string): Array<{ variantNum: number; lines: string[] }> {
+  const HEADING = '### variant_';
+  const sections: Array<{ variantNum: number; lines: string[] }> = [];
+  let current: { variantNum: number; lines: string[] } | undefined;
+  const flush = () => {
+    if (current && current.lines.some((l) => l.trim() !== '')) sections.push(current);
+    current = undefined;
+  };
+
+  for (const rawLine of content.split('\n')) {
+    const line = rawLine.endsWith('\r') ? rawLine.slice(0, -1) : rawLine;
+    if (!line.startsWith('###')) {
+      current?.lines.push(line);
+      continue;
+    }
+    flush();
+    if (!line.startsWith(HEADING)) continue;
+    let end = HEADING.length;
+    while (end < line.length && line.charAt(end) >= '0' && line.charAt(end) <= '9') end++;
+    if (end > HEADING.length && line.slice(end).trim() === '') {
+      current = { variantNum: parseInt(line.slice(HEADING.length, end), 10), lines: [] };
+    }
+  }
+  flush();
+  return sections;
+}
+
+/**
  * Reads a variant `config:` value that spans more than one line, either as a
  * fenced code block on the lines after an empty `config:`, or as a bare JSON
  * object/array that opens on the `config:` line and closes on a later one.
@@ -271,11 +293,15 @@ function readConfigBlock(
   if (value === '') {
     let fenceLine = keyLine + 1;
     while (fenceLine < lines.length && lines[fenceLine]!.trim() === '') fenceLine++;
-    if (fenceLine >= lines.length || !lines[fenceLine]!.trim().startsWith('```')) {
-      return undefined;
-    }
+    if (fenceLine >= lines.length) return undefined;
+    const opening = lines[fenceLine]!.trim();
+    const fenceLength = countBackticks(opening, 0);
+    // A backtick fence is at least three backticks, and its info string
+    // (`json`) may not contain backticks.
+    if (fenceLength < 3 || opening.includes('`', fenceLength)) return undefined;
     for (let end = fenceLine + 1; end < lines.length; end++) {
-      if (lines[end]!.trim() === '```') {
+      const closing = lines[end]!.trim();
+      if (closing.length >= fenceLength && countBackticks(closing, 0) === closing.length) {
         return {
           config: lines
             .slice(fenceLine + 1, end)
@@ -289,28 +315,37 @@ function readConfigBlock(
   }
 
   if (value[0] !== '{' && value[0] !== '[') return undefined;
-  const closing = findJsonValueEnd([value, ...lines.slice(keyLine + 1)]);
-  if (closing === 0) return undefined;
-  // Unbalanced: keep everything to the end of the variant so the payload
-  // builder reports the invalid JSON with the variant's name.
-  const lastLine = closing === -1 ? lines.length - 1 : keyLine + closing;
+  const closing = findJsonValueEnd(value, lines, keyLine + 1);
+  if (closing === keyLine) return undefined;
+  if (closing === -1) {
+    // Reading on to the end of the variant would swallow its other keys and
+    // report the JSON error against the wrong name, so fail here instead.
+    throw new Error(
+      `Invalid JSON in template variant_${variantNum} config: the ${value[0]} that ` +
+        `opens on the config: line is never closed`
+    );
+  }
   return {
-    config: [value, ...lines.slice(keyLine + 1, lastLine + 1)].join('\n').trim(),
-    lastLine,
+    config: [value, ...lines.slice(keyLine + 1, closing + 1)].join('\n').trim(),
+    lastLine: closing,
   };
 }
 
 /**
  * Index of the line on which the JSON object/array starting at the beginning
- * of `lines[0]` closes, or -1 if it never does. Brackets inside strings are
- * ignored.
+ * of `first` (the rest of line `from - 1`) closes, scanning on through
+ * `lines[from..]`, or -1 if it never does. Brackets inside strings are ignored.
  */
-function findJsonValueEnd(lines: string[]): number {
+function findJsonValueEnd(first: string, lines: string[], from: number): number {
   let depth = 0;
   let inString = false;
   let escaped = false;
-  for (let n = 0; n < lines.length; n++) {
-    const line = lines[n]!;
+  for (let n = from - 1; n < lines.length; n++) {
+    const line = n === from - 1 ? first : lines[n]!;
+    // JSON strings cannot span lines, so an unclosed quote is a syntax error
+    // on its own line rather than a reason to swallow the lines after it.
+    inString = false;
+    escaped = false;
     for (let c = 0; c < line.length; c++) {
       const ch = line.charAt(c);
       if (inString) {
@@ -328,6 +363,12 @@ function findJsonValueEnd(lines: string[]): number {
     }
   }
   return -1;
+}
+
+function countBackticks(text: string, from: number): number {
+  let i = from;
+  while (i < text.length && text.charAt(i) === '`') i++;
+  return i - from;
 }
 
 function parseCustomFields(content: string): Record<string, string> {

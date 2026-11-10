@@ -208,20 +208,216 @@ config: [
       expect(JSON.parse(result.variants![0].config!)).toEqual([1, 2]);
     });
 
-    it('keeps an unbalanced bare config to the end of the variant so the builder reports it', () => {
-      const result = parseExperimentMarkdown(
-        variantsDoc(`### variant_0
+    it('throws a clear error on a bare config that never closes, without swallowing later variants', () => {
+      expect(() =>
+        parseExperimentMarkdown(
+          variantsDoc(`### variant_0
 
 config: {
   "a": 1
+name: control
 
 ### variant_1
 
 config: {"b":2}
 `)
+        )
+      ).toThrow(/Invalid JSON in template variant_0 config: the \{ .* never closed/);
+    });
+
+    it('does not let an unclosed quote hide the closing brace on a later line', () => {
+      const result = parseExperimentMarkdown(
+        variantsDoc(`### variant_0
+
+config: {
+  "a": "oops,
+  "b": 2
+}
+name: control
+`)
       );
-      expect(result.variants![0].config).toBe('{\n  "a": 1');
-      expect(result.variants![1].config).toBe('{"b":2}');
+      expect(result.variants![0].config).toBe('{\n  "a": "oops,\n  "b": 2\n}');
+      expect(result.variants![0].name).toBe('control');
+    });
+
+    it('ignores braces, brackets and backticks inside JSON strings of a bare config', () => {
+      const result = parseExperimentMarkdown(
+        variantsDoc(`### variant_0
+
+config: {
+  "md": "\`\`\`json {[ not a fence",
+  "esc": "a \\\\\\" } ]"
+}
+name: control
+`)
+      );
+      expect(JSON.parse(result.variants![0].config!)).toEqual({
+        md: '\`\`\`json {[ not a fence',
+        esc: 'a \\" } ]',
+      });
+      expect(result.variants![0].name).toBe('control');
+    });
+
+    it('keeps backtick runs inside a fenced config and closes only on a fence line', () => {
+      const result = parseExperimentMarkdown(
+        variantsDoc(`### variant_0
+
+config:
+\`\`\`json
+{
+  "snippet": "\`\`\`",
+  "inline": "\`code\`"
+}
+\`\`\`
+name: control
+`)
+      );
+      expect(JSON.parse(result.variants![0].config!)).toEqual({
+        snippet: '\`\`\`',
+        inline: '\`code\`',
+      });
+      expect(result.variants![0].name).toBe('control');
+    });
+
+    it('closes a longer opening fence only with a fence at least as long', () => {
+      const result = parseExperimentMarkdown(
+        variantsDoc(`### variant_0
+
+config:
+\`\`\`\`json
+{"a": 1}
+\`\`\`
+\`\`\`\`
+name: control
+`)
+      );
+      expect(result.variants![0].config).toBe('{"a": 1}\n\`\`\`');
+      expect(result.variants![0].name).toBe('control');
+    });
+
+    it('does not end a variant at ### inside a config value', () => {
+      const result = parseExperimentMarkdown(
+        variantsDoc(`### variant_0
+
+config: {
+  "color": "###fff"
+}
+name: control
+
+### variant_1
+
+config: {"heading": "### title"}
+name: treatment
+`)
+      );
+      expect(result.variants).toHaveLength(2);
+      expect(JSON.parse(result.variants![0].config!)).toEqual({ color: '###fff' });
+      expect(result.variants![0].name).toBe('control');
+      expect(JSON.parse(result.variants![1].config!)).toEqual({ heading: '### title' });
+      expect(result.variants![1].name).toBe('treatment');
+    });
+
+    it('parses fenced, bare and single-line config with CRLF line endings', () => {
+      const doc = variantsDoc(`### variant_0
+
+config:
+\`\`\`json
+{
+  "a": 1
+}
+\`\`\`
+name: control
+screenshot_id: 7
+
+### variant_1
+
+config: {
+  "b": [1, 2]
+}
+name: treatment
+
+### variant_2
+
+config: {"c":3}
+name: other
+`).replace(/\n/g, '\r\n');
+      const result = parseExperimentMarkdown(doc);
+      expect(result.name).toBe('exp1');
+      expect(result.variants).toHaveLength(3);
+      expect(JSON.parse(result.variants![0].config!)).toEqual({ a: 1 });
+      expect(result.variants![0].config).not.toContain('\r');
+      expect(result.variants![0].name).toBe('control');
+      expect(result.variants![0].screenshot_id).toBe(7);
+      expect(JSON.parse(result.variants![1].config!)).toEqual({ b: [1, 2] });
+      expect(result.variants![1].config).not.toContain('\r');
+      expect(result.variants![1].name).toBe('treatment');
+      expect(result.variants![2].config).toBe('{"c":3}');
+      expect(result.variants![2].name).toBe('other');
+    });
+
+    it('parses other variant keys and later sections after a multi-line config', () => {
+      const result = parseExperimentMarkdown(`---
+name: exp1
+---
+
+## Variants
+
+### variant_0
+
+config:
+\`\`\`json
+{"a": 1}
+\`\`\`
+name: control
+screenshot_id: 3
+![Control](./control.png)
+
+### variant_1
+
+config: {
+  "b": 2
+}
+name: treatment
+screenshot: ./t.png
+
+## Audience
+
+\`\`\`json
+{"filter": []}
+\`\`\`
+
+## Metrics
+
+primary_metric: conversions
+`);
+      expect(result.variants![0]).toEqual({
+        variant: 0,
+        name: 'control',
+        config: '{"a": 1}',
+        screenshot_id: 3,
+        screenshot: './control.png',
+        screenshot_label: 'Control',
+      });
+      expect(result.variants![1]).toEqual({
+        variant: 1,
+        name: 'treatment',
+        config: '{\n  "b": 2\n}',
+        screenshot: './t.png',
+      });
+      expect(result.audience).toBe('{"filter": []}');
+      expect(result.primary_metric).toBe('conversions');
+    });
+
+    it('leaves invalid single-line config to the payload builder', () => {
+      const result = parseExperimentMarkdown(
+        variantsDoc(`### variant_0
+
+config: {"a":1} trailing
+name: control
+`)
+      );
+      expect(result.variants![0].config).toBe('{"a":1} trailing');
+      expect(result.variants![0].name).toBe('control');
     });
 
     it('leaves single-line config unchanged', () => {
